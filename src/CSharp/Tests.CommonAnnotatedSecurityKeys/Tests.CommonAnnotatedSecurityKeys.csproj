@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+    <TargetFrameworks>net8.0</TargetFrameworks>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <Import Project="$(MsBuildThisFileDirectory)..\Build.props" />
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" PrivateAssets="All" />
+    <PackageReference Include="MSTest.TestFramework" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CommonAnnotatedSecurityKeys\CommonAnnotatedSecurityKeys.csproj" />
+  </ItemGroup>
+
+</Project>

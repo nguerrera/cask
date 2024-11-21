@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Cask.Cli": {
+      "commandName": "Project",
+      "commandLineArgs": "generate --count 5 --length 32 --signature MSQL"
+    }
+  }
+}
