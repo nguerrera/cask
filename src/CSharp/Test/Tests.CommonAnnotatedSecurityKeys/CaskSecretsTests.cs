@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 
 using CommonAnnotatedSecurityKeys;
 
@@ -11,7 +10,6 @@ using Xunit;
 
 namespace Tests.CommonAnnotatedSecurityKeys
 {
-    [ExcludeFromCodeCoverage]
     public class CaskSecretsTests
     {
         private static readonly IList<ICask> casks;
@@ -55,6 +53,39 @@ namespace Tests.CommonAnnotatedSecurityKeys
 
                 IsCaskValidate(cask, key);
 
+            }
+        }
+
+        [Theory]
+        [InlineData(16, 2023), InlineData(16, 2088)]
+        [InlineData(32, 2023), InlineData(32, 2088)]
+        [InlineData(64, 2023), InlineData(64, 2088)]
+        public void CaskSecrets_GenerateKey_InvalidTimestamps(int secretEntropyInBytes, int invalidYear)
+        {
+            var testCaskUtilityApi = new TestCaskUtilityApi();
+            CaskUtilityApi.Instance = testCaskUtilityApi;
+
+            try
+            {
+                foreach (ICask cask in casks)
+                {
+                    for (int month = 0; month < 12; month++)
+                    {
+                        testCaskUtilityApi.GetCurrentDateTimeUtcFunc =
+                            () => new DateTimeOffset(new DateOnly(invalidYear, 1 + month, 1), default, default);
+
+                        var action = () => cask.GenerateKey(providerSignature: "TEST",
+                                                            allocatorCode: "88",
+                                                            reserved: "ABCD",
+                                                            secretEntropyInBytes);
+
+                        Assert.Throws<ArgumentOutOfRangeException>(action);
+                    }
+                }
+            }
+            finally
+            {
+                CaskUtilityApi.Instance = null;
             }
         }
 

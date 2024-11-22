@@ -135,6 +135,12 @@ namespace CommonAnnotatedSecurityKeys
             }
 
             DateTimeOffset utcNow = CaskUtilityApi.Instance.GetCurrentDateTimeUtc();
+
+            if (utcNow.Year < 2024 || utcNow.Year > 2087)
+            {
+                throw new ArgumentOutOfRangeException("CASK requires the current year to be between 2024 and 2087.");
+            }
+
             char yearsSince2024 = CaskUtilityApi.OrderedUrlSafeBase64Characters[utcNow.Year - 2024];
             char zeroIndexedMonth = CaskUtilityApi.OrderedUrlSafeBase64Characters[utcNow.Month - 1];
             string allocatorAndTimestamp = $"{allocatorCode}{yearsSince2024}{zeroIndexedMonth}";

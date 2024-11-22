@@ -1,13 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+  <Import Project="$(MsBuildThisFileDirectory)..\Build.props" />
+
   <PropertyGroup>
     <IsPackable>true</IsPackable>
-    <TargetFrameworks>net8.0</TargetFrameworks>
     <EnableNETAnalyzers>false</EnableNETAnalyzers>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
-
-  <Import Project="$(MsBuildThisFileDirectory)..\Build.props" />
 
   <PropertyGroup Label="Package">
     <Title>$(RootNamespace)</Title>
