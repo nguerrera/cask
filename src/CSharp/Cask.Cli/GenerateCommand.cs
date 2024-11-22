@@ -2,10 +2,6 @@
 
 using System.Text;
 
-using Cask.Cli;
-
-using CommonAnnotatedSecurityKeys;
-
 namespace CommonAnnotatedSecurityKeys.Cli
 {
     public class GenerateCommand
@@ -57,7 +53,7 @@ namespace CommonAnnotatedSecurityKeys.Cli
                 return "AAAAA";
             }
 
-            byte[] hashed = CaskConstants.Sha256.ComputeHash(Encoding.UTF8.GetBytes(text));
+            byte[] hashed = CaskUtilityApi.Sha256.ComputeHash(Encoding.UTF8.GetBytes(text));
             return Convert.ToBase64String(hashed).ToUrlSafe().Substring(0, 5);
         }
     }

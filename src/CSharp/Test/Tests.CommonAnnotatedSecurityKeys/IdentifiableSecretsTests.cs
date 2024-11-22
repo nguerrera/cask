@@ -41,7 +41,7 @@ namespace Tests.CommonAnnotatedSecurityKeys
         }
 
         [Theory, InlineData(16), InlineData(32), InlineData(64)]
-        public void CaskSecrets_GenerateKey(int secretEntropyInBytes)
+        public void CaskSecrets_GenerateKey_Basic(int secretEntropyInBytes)
         {
             foreach (ICask cask in casks)
             {
@@ -55,6 +55,42 @@ namespace Tests.CommonAnnotatedSecurityKeys
 
                 IsCaskValidate(cask, key);
 
+            }
+        }
+
+        [Theory, InlineData(16), InlineData(32), InlineData(64)]
+        public void CaskSecrets_GenerateKey_ValidTimestamps(int secretEntropyInBytes)
+        {
+            var testCaskUtilityApi = new TestCaskUtilityApi();
+            CaskUtilityApi.Instance = testCaskUtilityApi;
+
+            try
+            {
+                foreach (ICask cask in casks)
+                {
+                    // Every year from 2024 - 2087 should produce a valid key.
+                    // We trust that the CASK standard will be long dead by
+                    // 2087 or perhaps simply all or most programmers will be.
+                    for (int year = 0; year < 64; year++)
+                    {
+                        for (int month = 0; month < 12; month++)
+                        {
+                            testCaskUtilityApi.GetCurrentDateTimeUtcFunc =
+                                () => new DateTimeOffset(new DateOnly(2024 + year, 1 + month, 1), default, default);
+
+                            string key = cask.GenerateKey(providerSignature: "TEST",
+                                                          allocatorCode: "88",
+                                                          reserved: "ABCD",
+                                                          secretEntropyInBytes);
+
+                            IsCaskValidate(cask, key);
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                CaskUtilityApi.Instance = null;
             }
         }
 
