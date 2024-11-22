@@ -12,7 +12,7 @@
 1. Copy random bytes to start of key
 1. Copy provider reserved bytes to key
 1. Copy CASK signature, allocator code, timestamp and provider signature
-1. Create an HMACSHA256 instance initialized with secret `Cask_v`
-1. Hash all other bytes of the key.
-1. Persist the first 3 bytes of the hash to the final 3 bytes of the key
+1. Obtain a CRC32 hashing API/object instance.
+1. Compute the 4-byte CRC32 of key bytes (all bytes except the last 3).
+1. Persist the first 3 bytes of the hash to the final 3 bytes of the key.
 1. Encode as a URL-safe base64 string and return the key.

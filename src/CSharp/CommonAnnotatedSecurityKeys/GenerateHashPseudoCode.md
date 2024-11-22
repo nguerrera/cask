@@ -17,6 +17,7 @@
 1. Copy CASK signature bytes to CASK hash
 1. Generate allocator and timestamp bytes (using current timestamp)
 1. Copy allocator and timestamp bytes to CASK hash
-1. Hash all current CASK hash bytes.
-1. Persist the first 3 bytes of the hash to the final 3 bytes of the key
+1. Obtain a CRC32 hashing API/object instance.
+1. Compute the 4-byte CRC32 of key bytes (all bytes except the last 3).
+1. Persist the first 3 bytes of the CRC32 hash to the final 3 bytes of the key
 1. Encode as a URL-safe base64 string and return the key.
