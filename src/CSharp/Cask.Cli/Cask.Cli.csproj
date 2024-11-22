@@ -1,0 +1,21 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Product>Common Annotated Security Keys</Product>
+  </PropertyGroup>
+
+  <Import Project="$(MsBuildThisFileDirectory)..\Build.props" />
+
+  <ItemGroup>
+    <PackageReference Include="CommandLineParser" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CommonAnnotatedSecurityKeys\CommonAnnotatedSecurityKeys.csproj" />
+  </ItemGroup>
+
+</Project>
