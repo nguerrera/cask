@@ -2,7 +2,6 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Running;
 
 using System.Security.Cryptography;
 
@@ -17,14 +16,14 @@ namespace CommonAnnotatedSecurityKeys.Benchmarks
         [Benchmark]
         public void UseCompareHash()
         {
-            string key = CaskSecrets.GenerateKey(TestProviderSignature, "99");
+            string key = Cask.Instance.GenerateKey(TestProviderSignature, "99");
             byte[] keyBytes = Convert.FromBase64String(key.FromUrlSafe());
-            string hash = CaskSecrets.GenerateHash(keyBytes, keyBytes, 32);
+            string hash = Cask.Instance.GenerateHash(keyBytes, keyBytes, 32);
             byte[] hashBytes = Convert.FromBase64String(hash.FromUrlSafe());
 
             for (int i = 0; i < iterations; i++)
             {
-                if (!CaskSecrets.CompareHash(hashBytes, keyBytes, keyBytes))
+                if (!Cask.Instance.CompareHash(hashBytes, keyBytes, keyBytes))
                 {
                     throw new InvalidOperationException();
                 }
@@ -34,9 +33,9 @@ namespace CommonAnnotatedSecurityKeys.Benchmarks
         [Benchmark]
         public void UseHmacSha256()
         {
-            string key = CaskSecrets.GenerateKey(TestProviderSignature, "99");
+            string key = Cask.Instance.GenerateKey(TestProviderSignature, "99");
             byte[] keyBytes = Convert.FromBase64String(key.FromUrlSafe());
-            string hash = CaskSecrets.GenerateHash(TestProviderSignatureBytes, keyBytes, 32);
+            string hash = Cask.Instance.GenerateHash(TestProviderSignatureBytes, keyBytes, 32);
             var hmac = new HMACSHA256(keyBytes);
             byte[] hashBytes = hmac.ComputeHash(TestProviderSignatureBytes);
 

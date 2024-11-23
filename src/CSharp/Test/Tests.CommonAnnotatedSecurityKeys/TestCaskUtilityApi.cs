@@ -4,7 +4,6 @@
 using CommonAnnotatedSecurityKeys;
 
 using System;
-using System.Diagnostics.CodeAnalysis;
 
 namespace Tests.CommonAnnotatedSecurityKeys
 {
@@ -12,9 +11,20 @@ namespace Tests.CommonAnnotatedSecurityKeys
     {
         public Func<DateTimeOffset> GetCurrentDateTimeUtcFunc = () => DateTimeOffset.UtcNow;
 
+        public Func<byte[], byte[]> ComputeCrc32HashFunc = (byte[] toChecksum) =>
+        {
+            Span<byte> span = toChecksum;
+            return CaskUtilityApi.Instance.ComputeCrc32Hash(span);
+        };
+
         public DateTimeOffset GetCurrentDateTimeUtc()
         {
             return GetCurrentDateTimeUtcFunc();
+        }
+
+        public byte[] ComputeCrc32Hash(Span<byte> toChecksum)
+        {
+            return ComputeCrc32HashFunc(toChecksum.ToArray());
         }
     }
 }

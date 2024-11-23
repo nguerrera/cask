@@ -8,6 +8,8 @@ namespace CommonAnnotatedSecurityKeys
     public interface ICaskUtilityApi
     {
         DateTimeOffset GetCurrentDateTimeUtc();
+
+        byte[] ComputeCrc32Hash(Span<byte> toChecksum);
     }
 }
 

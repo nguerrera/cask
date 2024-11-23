@@ -2,7 +2,6 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 using System;
-using System.Collections.Generic;
 
 using CommonAnnotatedSecurityKeys;
 
@@ -10,40 +9,31 @@ using Xunit;
 
 namespace Tests.CommonAnnotatedSecurityKeys
 {
-    public class CaskSecretsTests
+    public abstract class CaskTestsBase
     {
-        private static readonly IList<ICask> casks;
-
-        static CaskSecretsTests()
+        protected CaskTestsBase(ICask cask)
         {
-            casks = new[]
-            {
-                new CSharpCask(),
-                /* TBD: new CPlusPlusCask(), Pinvoke to C++ implementation */
-                /* TBD: new RustCask(), Foreign function interface to Rust implementation */
-            };
+            Cask = cask;
         }
+
+        protected ICask Cask { get; }
 
         [Theory, InlineData(16), InlineData(32), InlineData(64)]
         public void CaskSecrets_IsCask(int secretEntropyInBytes)
         {
-            foreach (ICask cask in casks)
-            {
-                string key = casks[0].GenerateKey(providerSignature: "TEST",
-                                                  allocatorCode: "88",
-                                                  reserved: null,
-                                                  secretEntropyInBytes);
+            string key = Cask.GenerateKey(providerSignature: "TEST",
+                                              allocatorCode: "88",
+                                              reserved: null,
+                                              secretEntropyInBytes);
 
-                IsCaskValidate(casks[0], key);
-            }
+            IsCaskValidate(Cask, key);
         }
 
         [Theory, InlineData(16), InlineData(32), InlineData(64)]
         public void CaskSecrets_GenerateKey_Basic(int secretEntropyInBytes)
         {
-            foreach (ICask cask in casks)
-            {
-                string key = cask.GenerateKey(providerSignature: "TEST",
+
+                string key = Cask.GenerateKey(providerSignature: "TEST",
                                               allocatorCode: "88",
                                               reserved: "ABCD",
                                               secretEntropyInBytes);
@@ -51,9 +41,8 @@ namespace Tests.CommonAnnotatedSecurityKeys
                 byte[] keyBytes = Convert.FromBase64String(key.FromUrlSafe());
                 Assert.True(keyBytes.Length % 3 == 0, "'GenerateKey' output wasn't aligned on a 3-byte boundary.");
 
-                IsCaskValidate(cask, key);
-
-            }
+                IsCaskValidate(Cask, key);
+            
         }
 
         [Theory]
@@ -62,26 +51,29 @@ namespace Tests.CommonAnnotatedSecurityKeys
         [InlineData(64, 2023), InlineData(64, 2088)]
         public void CaskSecrets_GenerateKey_InvalidTimestamps(int secretEntropyInBytes, int invalidYear)
         {
+            // The CASK standard timestamp is only valid from 2024 - 2087
+            // (where the base64-encoded character 'A' indicates 2024, and
+            // the last valid base64 character '_' indicates 2087.
+
             var testCaskUtilityApi = new TestCaskUtilityApi();
             CaskUtilityApi.Instance = testCaskUtilityApi;
 
             try
             {
-                foreach (ICask cask in casks)
+
+                for (int month = 0; month < 12; month++)
                 {
-                    for (int month = 0; month < 12; month++)
-                    {
-                        testCaskUtilityApi.GetCurrentDateTimeUtcFunc =
-                            () => new DateTimeOffset(new DateOnly(invalidYear, 1 + month, 1), default, default);
+                    testCaskUtilityApi.GetCurrentDateTimeUtcFunc =
+                        () => new DateTimeOffset(new DateOnly(invalidYear, 1 + month, 1), default, default);
 
-                        var action = () => cask.GenerateKey(providerSignature: "TEST",
-                                                            allocatorCode: "88",
-                                                            reserved: "ABCD",
-                                                            secretEntropyInBytes);
+                    var action = () => Cask.GenerateKey(providerSignature: "TEST",
+                                                        allocatorCode: "88",
+                                                        reserved: "ABCD",
+                                                        secretEntropyInBytes);
 
-                        Assert.Throws<ArgumentOutOfRangeException>(action);
-                    }
+                    Assert.Throws<ArgumentOutOfRangeException>(action);
                 }
+
             }
             finally
             {
@@ -97,26 +89,25 @@ namespace Tests.CommonAnnotatedSecurityKeys
 
             try
             {
-                foreach (ICask cask in casks)
+
+                // Every year from 2024 - 2087 should produce a valid key.
+                // We trust that the CASK standard will be long dead by
+                // 2087 or perhaps simply all or most programmers will be.
+                for (int year = 0; year < 64; year++)
                 {
-                    // Every year from 2024 - 2087 should produce a valid key.
-                    // We trust that the CASK standard will be long dead by
-                    // 2087 or perhaps simply all or most programmers will be.
-                    for (int year = 0; year < 64; year++)
+                    for (int month = 0; month < 12; month++)
                     {
-                        for (int month = 0; month < 12; month++)
-                        {
-                            testCaskUtilityApi.GetCurrentDateTimeUtcFunc =
-                                () => new DateTimeOffset(new DateOnly(2024 + year, 1 + month, 1), default, default);
+                        testCaskUtilityApi.GetCurrentDateTimeUtcFunc =
+                            () => new DateTimeOffset(new DateOnly(2024 + year, 1 + month, 1), default, default);
 
-                            string key = cask.GenerateKey(providerSignature: "TEST",
-                                                          allocatorCode: "88",
-                                                          reserved: "ABCD",
-                                                          secretEntropyInBytes);
+                        string key = Cask.GenerateKey(providerSignature: "TEST",
+                                                      allocatorCode: "88",
+                                                      reserved: "ABCD",
+                                                      secretEntropyInBytes);
 
-                            IsCaskValidate(cask, key);
-                        }
+                        IsCaskValidate(Cask, key);
                     }
+
                 }
             }
             finally
@@ -145,7 +136,7 @@ namespace Tests.CommonAnnotatedSecurityKeys
                 string modifiedKey = $"{key.Substring(0, signatureIndex + i)}X{key.Substring(signatureIndex + i + 1)}";
 
                 Span<byte> span = new Span<byte>(keyBytes, 0, keyBytes.Length - 3);
-                byte[] hashBytes = CSharpCask.ComputeCrc32Hash(span);
+                byte[] hashBytes = CaskUtilityApi.Instance.ComputeCrc32Hash(span);
 
                 string checksum = Convert.ToBase64String(hashBytes).ToUrlSafe().Substring(0, 4);
                 modifiedKey = $"{modifiedKey.Substring(0, modifiedKey.Length - 4)}{checksum}";

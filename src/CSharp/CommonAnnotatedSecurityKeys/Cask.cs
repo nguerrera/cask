@@ -3,12 +3,23 @@
 
 using System;
 using System.Security.Cryptography;
-using System.Text;
 
 namespace CommonAnnotatedSecurityKeys
 {
-    internal class CSharpCask : ICask
+    public class Cask : ICask
     {
+        [ThreadStatic]
+        private static Lazy<Cask> cask =
+            new(() => new Cask());
+
+        public static ICask Instance
+        {
+            get
+            {
+                return cask.Value;
+            }
+        }
+
         public bool IsCask(string key)
         {
             if (CaskUtilityApi.CaskSignature[0] != key[key.Length - 16] ||
@@ -38,7 +49,7 @@ namespace CommonAnnotatedSecurityKeys
             }
 
             Span<byte> toChecksum = new Span<byte>(keyBytes, 0, keyBytes.Length - 3);
-            byte[] crc32Bytes = ComputeCrc32Hash(toChecksum);
+            byte[] crc32Bytes = CaskUtilityApi.Instance.ComputeCrc32Hash(toChecksum);
 
             return
                 crc32Bytes[0] == keyBytes[keyBytes.Length - 3] &&
@@ -119,7 +130,7 @@ namespace CommonAnnotatedSecurityKeys
             Array.Copy(providerSignature, 0, keyBytes, providerSignatureOffset, providerSignature.Length);
 
             Span<byte> toChecksum = new Span<byte>(keyBytes, 0, partialHashOffset);
-            byte[] crc32Bytes = ComputeCrc32Hash(toChecksum);
+            byte[] crc32Bytes = CaskUtilityApi.Instance.ComputeCrc32Hash(toChecksum);
 
             Array.Copy(crc32Bytes, 0, keyBytes, partialHashOffset, 3);
 
@@ -215,7 +226,7 @@ namespace CommonAnnotatedSecurityKeys
             Array.Copy(secret, secretProviderSignatureBytesOffset, hashedSignature, providerSignatureBytesOffset, 3);
 
             Span<byte> toChecksum = new Span<byte>(hashedSignature, 0, providerSignatureBytesOffset + 3);
-            byte[] crc32Hash = ComputeCrc32Hash(toChecksum);
+            byte[] crc32Hash = CaskUtilityApi.Instance.ComputeCrc32Hash(toChecksum);
             int crc32HashOffset = providerSignatureBytesOffset + 3;
             Array.Copy(crc32Hash, 0, hashedSignature, crc32HashOffset, 3);
 
@@ -245,15 +256,6 @@ namespace CommonAnnotatedSecurityKeys
             }
 
             return matched;
-        }
-
-        public static byte[] ComputeCrc32Hash(Span<byte> toChecksum)
-        {
-            CaskUtilityApi.Crc32.Reset();
-            CaskUtilityApi.Crc32.Append(toChecksum);
-            byte[] hashBytes = new byte[4];
-            CaskUtilityApi.Crc32.GetHashAndReset(hashBytes);
-            return hashBytes;
         }
     }
 }

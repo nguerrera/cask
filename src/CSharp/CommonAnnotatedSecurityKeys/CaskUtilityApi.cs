@@ -38,7 +38,9 @@ namespace CommonAnnotatedSecurityKeys
 
         public static byte[] CaskSignatureBytes => Convert.FromBase64String(CaskSignature);
 
-        public static readonly Regex CaskKeyRegex = new Regex("(^|[^A-Za-z0-9_-])([A-Za-z0-9_-]{4}){6,}JQQJ[A-Za-z0-9_-]{12}($|[^A-Za-z0-9_-])", RegexOptions.Compiled | RegexOptions.ExplicitCapture | RegexOptions.CultureInvariant);
+        public static readonly Regex CaskKeyRegex =
+            new Regex("(^|[^A-Za-z0-9+/-_])([A-Za-z0-9-_]{4}){6,}JQQJ[A-Za-z0-9-_]{12}($|[^A-Za-z0-9+/-_])",
+                      RegexOptions.Compiled | RegexOptions.ExplicitCapture | RegexOptions.CultureInvariant);
 
         public static ICaskUtilityApi Instance
         {
@@ -83,6 +85,15 @@ namespace CommonAnnotatedSecurityKeys
         public DateTimeOffset GetCurrentDateTimeUtc()
         {
             return DateTimeOffset.UtcNow;
+        }
+
+        public byte[] ComputeCrc32Hash(Span<byte> toChecksum)
+        {
+            Crc32.Reset();
+            Crc32.Append(toChecksum);
+            byte[] hashBytes = new byte[4];
+            Crc32.GetHashAndReset(hashBytes);
+            return hashBytes;
         }
     }
 }

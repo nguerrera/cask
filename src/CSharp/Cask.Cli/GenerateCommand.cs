@@ -10,7 +10,7 @@ namespace CommonAnnotatedSecurityKeys.Cli
 
         internal int Run(GenerateOptions options)
         {
-            var cask = new CSharpCask();
+            var cask = new Cask();
             byte[] derivationInput = Encoding.UTF8.GetBytes(nameof(derivationInput));
 
             string cloudText = "AC";
