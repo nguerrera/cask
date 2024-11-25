@@ -3,18 +3,36 @@
 
 using System;
 using System.Security.Cryptography;
-using System.Text;
 
 namespace CommonAnnotatedSecurityKeys
 {
-    internal class CSharpCask : ICask
+    public class Cask : ICask
     {
+        [ThreadStatic]
+        private static Lazy<Cask> cask =
+            new(() => new Cask());
+
+        public static ICask Instance
+        {
+            get
+            {
+                return cask.Value;
+            }
+        }
+
+        public Cask()
+        {
+            Utilities = new CaskUtilityApi();
+        }
+
+        public ICaskUtilityApi Utilities { get; set; }
+
         public bool IsCask(string key)
         {
-            if (CaskConstants.CaskSignature[0] != key[key.Length - 16] ||
-                CaskConstants.CaskSignature[1] != key[key.Length - 15] ||
-                CaskConstants.CaskSignature[2] != key[key.Length - 14] ||
-                CaskConstants.CaskSignature[3] != key[key.Length - 13])
+            if (CaskUtilityApi.CaskSignature[0] != key[key.Length - 16] ||
+                CaskUtilityApi.CaskSignature[1] != key[key.Length - 15] ||
+                CaskUtilityApi.CaskSignature[2] != key[key.Length - 14] ||
+                CaskUtilityApi.CaskSignature[3] != key[key.Length - 13])
             {
                 return false;
             }
@@ -30,15 +48,16 @@ namespace CommonAnnotatedSecurityKeys
             // leads to a chance of collision of 1 in 2 ^ 48, or
             // 1 in 281,474,976,710,656, or ~1 million times less likely than
             // winning the Powerball lottery.
-            if (CaskConstants.CaskSignatureBytes[0] != keyBytes[keyBytes.Length - 12] ||
-                CaskConstants.CaskSignatureBytes[1] != keyBytes[keyBytes.Length - 11] ||
-                CaskConstants.CaskSignatureBytes[2] != keyBytes[keyBytes.Length - 10])
+            if (CaskUtilityApi.CaskSignatureBytes[0] != keyBytes[keyBytes.Length - 12] ||
+                CaskUtilityApi.CaskSignatureBytes[1] != keyBytes[keyBytes.Length - 11] ||
+                CaskUtilityApi.CaskSignatureBytes[2] != keyBytes[keyBytes.Length - 10])
             {
                 return false;
             }
 
             Span<byte> toChecksum = new Span<byte>(keyBytes, 0, keyBytes.Length - 3);
-            byte[] crc32Bytes = ComputeCrc32Hash(toChecksum);
+            byte[] crc32Bytes = new byte[4];
+            Utilities.ComputeCrc32Hash(toChecksum, crc32Bytes);
 
             return
                 crc32Bytes[0] == keyBytes[keyBytes.Length - 3] &&
@@ -92,7 +111,7 @@ namespace CommonAnnotatedSecurityKeys
 
             if (testChar == default)
             {
-                CaskConstants.Rng.GetBytes(keyBytes);
+                CaskUtilityApi.Rng.GetBytes(keyBytes);
             }
             else
             {
@@ -110,7 +129,7 @@ namespace CommonAnnotatedSecurityKeys
             Array.Copy(reserved ?? new byte[] { }, 0, keyBytes, reservedOffset, reserved?.Length ?? 0);
 
             // Copy 'JQQJ', the CASK standard fixed signature, into the key.
-            Array.Copy(CaskConstants.CaskSignatureBytes, 0, keyBytes, caskSignatureOffset, 3);
+            Array.Copy(CaskUtilityApi.CaskSignatureBytes, 0, keyBytes, caskSignatureOffset, 3);
 
             // Copy the allocator and timestamp into the key.
             Array.Copy(allocatorAndTimestampBytes, 0, keyBytes, allocatorAndTimestampOffset, allocatorAndTimestampBytes.Length);
@@ -119,7 +138,9 @@ namespace CommonAnnotatedSecurityKeys
             Array.Copy(providerSignature, 0, keyBytes, providerSignatureOffset, providerSignature.Length);
 
             Span<byte> toChecksum = new Span<byte>(keyBytes, 0, partialHashOffset);
-            byte[] crc32Bytes = ComputeCrc32Hash(toChecksum);
+
+            byte[] crc32Bytes = new byte[4];
+            Utilities.ComputeCrc32Hash(toChecksum, crc32Bytes);
 
             Array.Copy(crc32Bytes, 0, keyBytes, partialHashOffset, 3);
 
@@ -127,13 +148,37 @@ namespace CommonAnnotatedSecurityKeys
             return keyBytes;
         }
 
-        internal static byte[] GenerateAllocatorAndTimestampBytes(string allocatorCode)
+        internal byte[] GenerateAllocatorAndTimestampBytes(string allocatorCode)
         {
-            DateTime utcNow = DateTime.UtcNow;
-            char yearsSince2024 = (char)('A' + utcNow.Year - 2024);
-            char zeroIndexedMonth = (char)('A' + utcNow.Month - 1);
+            if (!ContainsOnlyUrlSafeBase64Characters(allocatorCode))
+            {
+                throw new ArgumentException($"Allocator code includes characters that are not legal URL-safe base64: '{allocatorCode}");
+            }
+
+            DateTimeOffset utcNow = Utilities.GetCurrentDateTimeUtc();
+
+            if (utcNow.Year < 2024 || utcNow.Year > 2087)
+            {
+                throw new ArgumentOutOfRangeException("CASK requires the current year to be between 2024 and 2087.");
+            }
+
+            char yearsSince2024 = CaskUtilityApi.OrderedUrlSafeBase64Characters[utcNow.Year - 2024];
+            char zeroIndexedMonth = CaskUtilityApi.OrderedUrlSafeBase64Characters[utcNow.Month - 1];
             string allocatorAndTimestamp = $"{allocatorCode}{yearsSince2024}{zeroIndexedMonth}";
-            return Convert.FromBase64String(allocatorAndTimestamp);
+            return Convert.FromBase64String(allocatorAndTimestamp.FromUrlSafe());
+        }
+
+        private static bool ContainsOnlyUrlSafeBase64Characters(string allocatorCode)
+        {
+            foreach (char c in allocatorCode)
+            {
+                if (!CaskUtilityApi.UrlSafeBase64Characters.Contains(c))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         public string GenerateHash(byte[] derivationInput, byte[] secret, int secretEntropyInBytes)
@@ -162,7 +207,7 @@ namespace CommonAnnotatedSecurityKeys
             Array.Copy(secret, secretEntropyInBytes, hashedSignature, reservedOffset, reservedBytesLength);
 
             int standardOffset = reservedOffset + reservedBytesLength;
-            Array.Copy(CaskConstants.CaskSignatureBytes, 0, hashedSignature, standardOffset, 3);
+            Array.Copy(CaskUtilityApi.CaskSignatureBytes, 0, hashedSignature, standardOffset, 3);
 
             byte[] secretAllocatorAndTimeStampBytes = new byte[3];
             int secretAllocatorAndTimeStampBytesOffset = secretEntropyInBytes + reservedBytesLength + 3;
@@ -180,19 +225,17 @@ namespace CommonAnnotatedSecurityKeys
             hashedSignature[allocatorAndTimestampOffset + 1] = (byte)((secret[secretAllocatorAndTimeStampBytesOffset + 1] & 0xf0) | (yearsSince2024 >> 4 & 0x3));
             hashedSignature[allocatorAndTimestampOffset + 2] = (byte)(yearsSince2024 << 6 | zeroIndexedMonth);
 
-            /*
-            string allocatorAndTimeStamp = Convert.ToBase64String(secretAllocatorAndTimeStampBytes);
-            byte[] allocatorAndTimestampBytes = GenerateAllocatorAndTimestampBytes(allocatorAndTimeStamp.Substring(0, 2));
-            Array.Copy(allocatorAndTimestampBytes, 0, hashedSignature, allocatorAndTimestampOffset, allocatorAndTimestampBytes.Length);
-            */
-
             int secretProviderSignatureBytesOffset = secretAllocatorAndTimeStampBytesOffset + 3;
             int providerSignatureBytesOffset = allocatorAndTimestampOffset + 3;
             Array.Copy(secret, secretProviderSignatureBytesOffset, hashedSignature, providerSignatureBytesOffset, 3);
 
-            byte[] hashOfHash = CaskConstants.Hmac256.ComputeHash(hashedSignature, 0, hashedSignature.Length - 3);
-            int hashOfHashOffset = providerSignatureBytesOffset + 3;
-            Array.Copy(hashOfHash, 0, hashedSignature, hashOfHashOffset, 3);
+            Span<byte> toChecksum = new Span<byte>(hashedSignature, 0, providerSignatureBytesOffset + 3);
+
+            byte[] crc32Bytes = new byte[4];
+            Utilities.ComputeCrc32Hash(toChecksum, crc32Bytes);
+            
+            int crc32HashOffset = providerSignatureBytesOffset + 3;
+            Array.Copy(crc32Bytes, 0, hashedSignature, crc32HashOffset, 3);
 
             return hashedSignature;
         }
@@ -211,8 +254,8 @@ namespace CommonAnnotatedSecurityKeys
             {
                 // We will complete a full comparison of all the data
                 // so that timing differences do not leak information
-                // to an upstream caller as far as how much of the hash
-                // matched before we observed a discrepancy.
+                // to an upstream caller (i.e., how much of the hash
+                // matched before we observed a discrepancy).
                 if (computedHash[i] != candidateHash[i])
                 {
                     matched = false;
@@ -220,15 +263,6 @@ namespace CommonAnnotatedSecurityKeys
             }
 
             return matched;
-        }
-
-        public static byte[] ComputeCrc32Hash(Span<byte> toChecksum)
-        {
-            CaskConstants.Crc32.Reset();
-            CaskConstants.Crc32.Append(toChecksum);
-            byte[] hashBytes = new byte[4];
-            CaskConstants.Crc32.GetHashAndReset(hashBytes);
-            return hashBytes;
         }
     }
 }

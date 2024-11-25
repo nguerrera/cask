@@ -5,6 +5,8 @@ namespace CommonAnnotatedSecurityKeys
 {
     public interface ICask
     {
+        ICaskUtilityApi Utilities { get; set; }
+
         bool IsCask(string keyOrHash);
 
         bool IsCask(byte[] keyOrHashBytes);

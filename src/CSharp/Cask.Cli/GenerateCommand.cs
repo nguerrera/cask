@@ -2,10 +2,6 @@
 
 using System.Text;
 
-using Cask.Cli;
-
-using CommonAnnotatedSecurityKeys;
-
 namespace CommonAnnotatedSecurityKeys.Cli
 {
     public class GenerateCommand
@@ -14,7 +10,7 @@ namespace CommonAnnotatedSecurityKeys.Cli
 
         internal int Run(GenerateOptions options)
         {
-            var cask = new CSharpCask();
+            var cask = new Cask();
             byte[] derivationInput = Encoding.UTF8.GetBytes(nameof(derivationInput));
 
             string cloudText = "AC";
@@ -57,7 +53,7 @@ namespace CommonAnnotatedSecurityKeys.Cli
                 return "AAAAA";
             }
 
-            byte[] hashed = CaskConstants.Sha256.ComputeHash(Encoding.UTF8.GetBytes(text));
+            byte[] hashed = CaskUtilityApi.Sha256.ComputeHash(Encoding.UTF8.GetBytes(text));
             return Convert.ToBase64String(hashed).ToUrlSafe().Substring(0, 5);
         }
     }

@@ -9,7 +9,7 @@ namespace CommonAnnotatedSecurityKeys.Benchmarks
     {
         private const int iterations = 100000;
         private const string TestProviderSignature = "TEST";
-        private static readonly string key = CaskSecrets.GenerateKey(TestProviderSignature, "99");
+        private static readonly string key = Cask.Instance.GenerateKey(TestProviderSignature, "99");
         private static readonly byte[] keyBytes = Convert.FromBase64String(key);
 
         [Benchmark]
@@ -17,7 +17,7 @@ namespace CommonAnnotatedSecurityKeys.Benchmarks
         {
             for (int i = 0; i < iterations; i++)
             {
-                CaskSecrets.IsCask(key);
+                Cask.Instance.IsCask(key);
             }
         }
 
@@ -26,7 +26,7 @@ namespace CommonAnnotatedSecurityKeys.Benchmarks
         {
             for (int i = 0; i < iterations; i++)
             {
-                CaskSecrets.IsCask(keyBytes);
+                Cask.Instance.IsCask(keyBytes);
             }
         }
     }

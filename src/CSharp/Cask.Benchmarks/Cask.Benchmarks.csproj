@@ -2,7 +2,6 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFrameworks>net8.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
@@ -10,7 +9,7 @@
   </PropertyGroup>
 
   <Import Project="$(MsBuildThisFileDirectory)..\Build.props" />
-
+  
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" />
   </ItemGroup>

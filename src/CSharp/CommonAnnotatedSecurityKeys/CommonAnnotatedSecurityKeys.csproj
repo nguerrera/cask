@@ -1,13 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+  <Import Project="$(MsBuildThisFileDirectory)..\Build.props" />
+
   <PropertyGroup>
     <IsPackable>true</IsPackable>
-    <TargetFrameworks>net8.0</TargetFrameworks>
     <EnableNETAnalyzers>false</EnableNETAnalyzers>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
-
-  <Import Project="$(MsBuildThisFileDirectory)..\Build.props" />
 
   <PropertyGroup Label="Package">
     <Title>$(RootNamespace)</Title>
@@ -25,13 +24,14 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
     </PackageReference>
-    <PackageReference Update="Nerdbank.GitVersioning" >
+    <PackageReference Update="Nerdbank.GitVersioning">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="System.Collections.Immutable" />
     <PackageReference Include="System.IO.Hashing" />
   </ItemGroup>
 
