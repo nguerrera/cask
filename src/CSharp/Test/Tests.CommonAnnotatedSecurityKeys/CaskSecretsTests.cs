@@ -55,9 +55,9 @@ namespace Tests.CommonAnnotatedSecurityKeys
             // (where the base64-encoded character 'A' indicates 2024, and
             // the last valid base64 character '_' indicates 2087.
 
+            var caskUtilities = Cask.Utilities;
             var testCaskUtilityApi = new TestCaskUtilityApi();
-            CaskUtilityApi.Instance = testCaskUtilityApi;
-
+            Cask.Utilities = testCaskUtilityApi;
             try
             {
 
@@ -77,7 +77,7 @@ namespace Tests.CommonAnnotatedSecurityKeys
             }
             finally
             {
-                CaskUtilityApi.Instance = null;
+                Cask.Utilities = caskUtilities;
             }
         }
 

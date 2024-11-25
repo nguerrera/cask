@@ -20,6 +20,13 @@ namespace CommonAnnotatedSecurityKeys
             }
         }
 
+        public Cask()
+        {
+            Utilities = new CaskUtilityApi();
+        }
+
+        public ICaskUtilityApi Utilities { get; set; }
+
         public bool IsCask(string key)
         {
             if (CaskUtilityApi.CaskSignature[0] != key[key.Length - 16] ||
@@ -50,7 +57,7 @@ namespace CommonAnnotatedSecurityKeys
 
             Span<byte> toChecksum = new Span<byte>(keyBytes, 0, keyBytes.Length - 3);
             byte[] crc32Bytes = new byte[4];
-            CaskUtilityApi.Instance.ComputeCrc32Hash(toChecksum, crc32Bytes);
+            Utilities.ComputeCrc32Hash(toChecksum, crc32Bytes);
 
             return
                 crc32Bytes[0] == keyBytes[keyBytes.Length - 3] &&
@@ -133,7 +140,7 @@ namespace CommonAnnotatedSecurityKeys
             Span<byte> toChecksum = new Span<byte>(keyBytes, 0, partialHashOffset);
 
             byte[] crc32Bytes = new byte[4];
-            CaskUtilityApi.Instance.ComputeCrc32Hash(toChecksum, crc32Bytes);
+            Utilities.ComputeCrc32Hash(toChecksum, crc32Bytes);
 
             Array.Copy(crc32Bytes, 0, keyBytes, partialHashOffset, 3);
 
@@ -141,14 +148,14 @@ namespace CommonAnnotatedSecurityKeys
             return keyBytes;
         }
 
-        internal static byte[] GenerateAllocatorAndTimestampBytes(string allocatorCode)
+        internal byte[] GenerateAllocatorAndTimestampBytes(string allocatorCode)
         {
             if (!ContainsOnlyUrlSafeBase64Characters(allocatorCode))
             {
                 throw new ArgumentException($"Allocator code includes characters that are not legal URL-safe base64: '{allocatorCode}");
             }
 
-            DateTimeOffset utcNow = CaskUtilityApi.Instance.GetCurrentDateTimeUtc();
+            DateTimeOffset utcNow = Utilities.GetCurrentDateTimeUtc();
 
             if (utcNow.Year < 2024 || utcNow.Year > 2087)
             {
@@ -225,7 +232,7 @@ namespace CommonAnnotatedSecurityKeys
             Span<byte> toChecksum = new Span<byte>(hashedSignature, 0, providerSignatureBytesOffset + 3);
 
             byte[] crc32Bytes = new byte[4];
-            CaskUtilityApi.Instance.ComputeCrc32Hash(toChecksum, crc32Bytes);
+            Utilities.ComputeCrc32Hash(toChecksum, crc32Bytes);
             
             int crc32HashOffset = providerSignatureBytesOffset + 3;
             Array.Copy(crc32Bytes, 0, hashedSignature, crc32HashOffset, 3);
