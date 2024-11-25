@@ -10,10 +10,8 @@ using System.Text.RegularExpressions;
 
 namespace CommonAnnotatedSecurityKeys
 {
-    internal class CaskUtilityApi : ICaskUtilityApi
+    public class CaskUtilityApi : ICaskUtilityApi
     {
-        private CaskUtilityApi() { }
-
         [ThreadStatic]
         private static Lazy<ICaskUtilityApi> caskConstants =
             new(() => new CaskUtilityApi());
@@ -82,12 +80,12 @@ namespace CommonAnnotatedSecurityKeys
 
         public static HashSet<char> UrlSafeBase64Characters = new HashSet<char>(OrderedUrlSafeBase64Characters);
 
-        public DateTimeOffset GetCurrentDateTimeUtc()
+        public virtual DateTimeOffset GetCurrentDateTimeUtc()
         {
             return DateTimeOffset.UtcNow;
         }
 
-        public byte[] ComputeCrc32Hash(Span<byte> toChecksum)
+        public virtual byte[] ComputeCrc32Hash(Span<byte> toChecksum)
         {
             Crc32.Reset();
             Crc32.Append(toChecksum);

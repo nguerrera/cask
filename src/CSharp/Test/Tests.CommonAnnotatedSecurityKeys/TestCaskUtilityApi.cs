@@ -7,24 +7,24 @@ using System;
 
 namespace Tests.CommonAnnotatedSecurityKeys
 {
-    internal class TestCaskUtilityApi : ICaskUtilityApi
+    internal class TestCaskUtilityApi : CaskUtilityApi
     {
-        public Func<DateTimeOffset> GetCurrentDateTimeUtcFunc = () => DateTimeOffset.UtcNow;
+        public Func<DateTimeOffset> GetCurrentDateTimeUtcFunc;
 
-        public Func<byte[], byte[]> ComputeCrc32HashFunc = (byte[] toChecksum) =>
-        {
-            Span<byte> span = toChecksum;
-            return CaskUtilityApi.Instance.ComputeCrc32Hash(span);
-        };
+        public Func<byte[], byte[]> ComputeCrc32HashFunc;
 
-        public DateTimeOffset GetCurrentDateTimeUtc()
+        public override DateTimeOffset GetCurrentDateTimeUtc()
         {
-            return GetCurrentDateTimeUtcFunc();
+            return GetCurrentDateTimeUtcFunc == null
+                ? base.GetCurrentDateTimeUtc()
+                : GetCurrentDateTimeUtcFunc();
         }
 
-        public byte[] ComputeCrc32Hash(Span<byte> toChecksum)
+        public override byte[] ComputeCrc32Hash(Span<byte> toChecksum)
         {
-            return ComputeCrc32HashFunc(toChecksum.ToArray());
+            return ComputeCrc32HashFunc == null
+                ? base.ComputeCrc32Hash(toChecksum)
+                : ComputeCrc32HashFunc(toChecksum.ToArray());
         }
     }
 }
