@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.IO.Hashing;
 using System.Security.Cryptography;
 using System.Text;
@@ -73,25 +74,25 @@ namespace CommonAnnotatedSecurityKeys
             get { return rng.Value; }
         }
 
-        public static IList<char> OrderedUrlSafeBase64Characters = new List<char>(new[] {
+        private static readonly char[] orderedUrlSafeBase64Characters = new[] {
             'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
             'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
-            '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '-', '_' });
+            '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '-', '_' };
 
-        public static HashSet<char> UrlSafeBase64Characters = new HashSet<char>(OrderedUrlSafeBase64Characters);
+        public static ReadOnlySpan<char> OrderedUrlSafeBase64Characters  => orderedUrlSafeBase64Characters;
+
+        public static readonly ISet<char> UrlSafeBase64Characters = orderedUrlSafeBase64Characters.ToImmutableHashSet();
 
         public virtual DateTimeOffset GetCurrentDateTimeUtc()
         {
             return DateTimeOffset.UtcNow;
         }
 
-        public virtual byte[] ComputeCrc32Hash(Span<byte> toChecksum)
+        public virtual void ComputeCrc32Hash(ReadOnlySpan<byte> toChecksum, Span<byte> destination)
         {
             Crc32.Reset();
             Crc32.Append(toChecksum);
-            byte[] hashBytes = new byte[4];
-            Crc32.GetHashAndReset(hashBytes);
-            return hashBytes;
+            Crc32.GetHashAndReset(destination);
         }
     }
 }

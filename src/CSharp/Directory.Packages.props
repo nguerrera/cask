@@ -5,6 +5,7 @@
   <ItemGroup>
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageVersion Include="CommandLineParser" Version="2.9.1" />
+    <PackageVersion Include="System.Collections.Immutable" Version="9.0.0" />
     <PackageVersion Include="System.IO.Hashing" Version="9.0.0" />
   </ItemGroup>
   <!-- Put build-only dependencies here to help code reviewers to see when product dependencies are changing or not. -->

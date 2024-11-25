@@ -11,7 +11,9 @@ namespace Tests.CommonAnnotatedSecurityKeys
     {
         public Func<DateTimeOffset> GetCurrentDateTimeUtcFunc;
 
-        public Func<byte[], byte[]> ComputeCrc32HashFunc;
+#pragma warning disable CS0649
+        public Action<byte[], byte[]> ComputeCrc32HashAction;
+#pragma warning restore CS0649
 
         public override DateTimeOffset GetCurrentDateTimeUtc()
         {
@@ -20,11 +22,15 @@ namespace Tests.CommonAnnotatedSecurityKeys
                 : GetCurrentDateTimeUtcFunc();
         }
 
-        public override byte[] ComputeCrc32Hash(Span<byte> toChecksum)
+        public override void ComputeCrc32Hash(ReadOnlySpan<byte> toChecksum, Span<byte> destination)
         {
-            return ComputeCrc32HashFunc == null
-                ? base.ComputeCrc32Hash(toChecksum)
-                : ComputeCrc32HashFunc(toChecksum.ToArray());
+            if (ComputeCrc32HashAction != null)
+            {
+                ComputeCrc32HashAction(toChecksum.ToArray(), destination.ToArray());
+                return;
+            }
+            
+            base.ComputeCrc32Hash(toChecksum, destination);
         }
     }
 }

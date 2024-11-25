@@ -49,7 +49,8 @@ namespace CommonAnnotatedSecurityKeys
             }
 
             Span<byte> toChecksum = new Span<byte>(keyBytes, 0, keyBytes.Length - 3);
-            byte[] crc32Bytes = CaskUtilityApi.Instance.ComputeCrc32Hash(toChecksum);
+            byte[] crc32Bytes = new byte[4];
+            CaskUtilityApi.Instance.ComputeCrc32Hash(toChecksum, crc32Bytes);
 
             return
                 crc32Bytes[0] == keyBytes[keyBytes.Length - 3] &&
@@ -130,7 +131,9 @@ namespace CommonAnnotatedSecurityKeys
             Array.Copy(providerSignature, 0, keyBytes, providerSignatureOffset, providerSignature.Length);
 
             Span<byte> toChecksum = new Span<byte>(keyBytes, 0, partialHashOffset);
-            byte[] crc32Bytes = CaskUtilityApi.Instance.ComputeCrc32Hash(toChecksum);
+
+            byte[] crc32Bytes = new byte[4];
+            CaskUtilityApi.Instance.ComputeCrc32Hash(toChecksum, crc32Bytes);
 
             Array.Copy(crc32Bytes, 0, keyBytes, partialHashOffset, 3);
 
@@ -215,20 +218,17 @@ namespace CommonAnnotatedSecurityKeys
             hashedSignature[allocatorAndTimestampOffset + 1] = (byte)((secret[secretAllocatorAndTimeStampBytesOffset + 1] & 0xf0) | (yearsSince2024 >> 4 & 0x3));
             hashedSignature[allocatorAndTimestampOffset + 2] = (byte)(yearsSince2024 << 6 | zeroIndexedMonth);
 
-            /*
-            string allocatorAndTimeStamp = Convert.ToBase64String(secretAllocatorAndTimeStampBytes);
-            byte[] allocatorAndTimestampBytes = GenerateAllocatorAndTimestampBytes(allocatorAndTimeStamp.Substring(0, 2));
-            Array.Copy(allocatorAndTimestampBytes, 0, hashedSignature, allocatorAndTimestampOffset, allocatorAndTimestampBytes.Length);
-            */
-
             int secretProviderSignatureBytesOffset = secretAllocatorAndTimeStampBytesOffset + 3;
             int providerSignatureBytesOffset = allocatorAndTimestampOffset + 3;
             Array.Copy(secret, secretProviderSignatureBytesOffset, hashedSignature, providerSignatureBytesOffset, 3);
 
             Span<byte> toChecksum = new Span<byte>(hashedSignature, 0, providerSignatureBytesOffset + 3);
-            byte[] crc32Hash = CaskUtilityApi.Instance.ComputeCrc32Hash(toChecksum);
+
+            byte[] crc32Bytes = new byte[4];
+            CaskUtilityApi.Instance.ComputeCrc32Hash(toChecksum, crc32Bytes);
+            
             int crc32HashOffset = providerSignatureBytesOffset + 3;
-            Array.Copy(crc32Hash, 0, hashedSignature, crc32HashOffset, 3);
+            Array.Copy(crc32Bytes, 0, hashedSignature, crc32HashOffset, 3);
 
             return hashedSignature;
         }
@@ -247,8 +247,8 @@ namespace CommonAnnotatedSecurityKeys
             {
                 // We will complete a full comparison of all the data
                 // so that timing differences do not leak information
-                // to an upstream caller as far as how much of the hash
-                // matched before we observed a discrepancy.
+                // to an upstream caller (i.e., how much of the hash
+                // matched before we observed a discrepancy).
                 if (computedHash[i] != candidateHash[i])
                 {
                     matched = false;

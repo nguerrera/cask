@@ -135,10 +135,12 @@ namespace Tests.CommonAnnotatedSecurityKeys
                 // Cycle through XQQJ, JXQJ, JQXJ, and JQQX.
                 string modifiedKey = $"{key.Substring(0, signatureIndex + i)}X{key.Substring(signatureIndex + i + 1)}";
 
-                Span<byte> span = new Span<byte>(keyBytes, 0, keyBytes.Length - 3);
-                byte[] hashBytes = CaskUtilityApi.Instance.ComputeCrc32Hash(span);
+                Span<byte> toChecksum = new Span<byte>(keyBytes, 0, keyBytes.Length - 3);
 
-                string checksum = Convert.ToBase64String(hashBytes).ToUrlSafe().Substring(0, 4);
+                byte[] crc32Bytes = new byte[4];
+                CaskUtilityApi.Instance.ComputeCrc32Hash(toChecksum, crc32Bytes);
+
+                string checksum = Convert.ToBase64String(crc32Bytes).ToUrlSafe().Substring(0, 4);
                 modifiedKey = $"{modifiedKey.Substring(0, modifiedKey.Length - 4)}{checksum}";
 
                 Assert.False(cask.IsCask(modifiedKey), $"'IsCask(string)' unexpectedly succeeded with modified 'JQQJ' signature: {modifiedKey}");

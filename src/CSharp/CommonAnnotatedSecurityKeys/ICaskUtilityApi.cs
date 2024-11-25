@@ -9,7 +9,7 @@ namespace CommonAnnotatedSecurityKeys
     {
         DateTimeOffset GetCurrentDateTimeUtc();
 
-        byte[] ComputeCrc32Hash(Span<byte> toChecksum);
+        void ComputeCrc32Hash(ReadOnlySpan<byte> toChecksum, Span<byte> destination);
     }
 }
 
