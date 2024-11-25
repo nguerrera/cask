@@ -60,7 +60,6 @@ namespace Tests.CommonAnnotatedSecurityKeys
             Cask.Utilities = testCaskUtilityApi;
             try
             {
-
                 for (int month = 0; month < 12; month++)
                 {
                     testCaskUtilityApi.GetCurrentDateTimeUtcFunc =
@@ -73,7 +72,6 @@ namespace Tests.CommonAnnotatedSecurityKeys
 
                     Assert.Throws<ArgumentOutOfRangeException>(action);
                 }
-
             }
             finally
             {
