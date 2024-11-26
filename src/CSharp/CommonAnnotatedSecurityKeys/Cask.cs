@@ -1,7 +1,6 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using System;
 using System.Security.Cryptography;
 
 namespace CommonAnnotatedSecurityKeys
@@ -67,7 +66,7 @@ namespace CommonAnnotatedSecurityKeys
 
         public string GenerateKey(string providerSignature,
                                   string allocatorCode,
-                                  string reserved = null,
+                                  string? reserved = null,
                                   int secretEntropyInBytes = 32)
         {
             byte[] reservedBytes = reserved == null 
@@ -86,7 +85,7 @@ namespace CommonAnnotatedSecurityKeys
 
         public byte[] GenerateKeyBytes(byte[] providerSignature,
                                        string allocatorCode,
-                                       byte[] reserved = null,
+                                       byte[]? reserved = null,
                                        int secretEntropyInBytes = 32,
                                        char testChar = default)
         {
