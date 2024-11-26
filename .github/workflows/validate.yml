@@ -24,10 +24,10 @@ jobs:
       run: dotnet --info
 
     - name: Restore
-      run: dotnet restore src/CSharp/Cask.sln
+      run: dotnet restore src/Cask.sln
 
     - name: Build
-      run: dotnet build -c Release --no-restore src/CSharp/Cask.sln
+      run: dotnet build -c Release --no-restore src/Cask.sln
 
     - name: Test
-      run: dotnet test -c Release --no-build src/CSharp/Cask.sln
+      run: dotnet test -c Release --no-build src/Cask.sln
