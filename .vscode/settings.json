@@ -1,0 +1,26 @@
+{
+  "dotnet.defaultSolution": "src/Cask.sln",
+  "dotnet.automaticallyCreateSolutionInWorkspace": false,
+  "editor.insertSpaces": true,
+  "editor.tabSize": 2,
+  "files.eol": "\n",
+  "files.insertFinalNewline": true,
+  "files.exclude": {
+    "bld/**": true,
+    "src/.vs/**": true,
+    "src/Key.snk": true
+  },
+  "[csharp]": {
+    "editor.detectIndentation": false,
+    "editor.tabSize": 4,
+    // C# formatting is enforced in this repo during PR validation so we can
+    // safely enable format-on-save without risk of re-formatting untouched
+    // code.
+    "editor.formatOnSave": true,
+  },
+  "[json][jsonc][xml][yaml]": {
+    "editor.detectIndentation": false,
+    "editor.insertSpaces": true,
+    "editor.tabSize": 2,
+  },
+}

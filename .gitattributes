@@ -1,5 +1,8 @@
 # Use unix line endings always, even on Windows
 *                            text=auto eol=lf
 
+# Use CRLF for solution files since VS will save them that way
+*.sln                        text=auto eol=crlf
+
 # Allow comments in JSON in GitHub rendering
 *.json                       linguist-language=JSON-with-Comments
