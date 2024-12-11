@@ -2,7 +2,6 @@
   <PropertyGroup>
     <TargetFrameworks>net8.0;net472</TargetFrameworks>
     <IsPackable>true</IsPackable>
-    <DefineConstants>$(DefineConstants);CASK</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,11 +15,12 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Cask.Tests" />
+    <InternalsVisibleTo Include="Cask.Benchmarks" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFrameworkIdentifier)' == '.NETCoreApp'">
-    <Compile Remove="Polyfill.cs" />
-    <None Include="Polyfill.cs" />
+    <Compile Remove="Polyfill*.cs" />
+    <None Include="Polyfill*.cs" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFrameworkIdentifier)' == '.NETCoreApp'">
