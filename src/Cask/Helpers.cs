@@ -111,6 +111,14 @@ internal static class Helpers
         }
     }
 
+    public static void ThrowIfEmpty<T>(ReadOnlySpan<T> value, [CallerArgumentExpression(nameof(value))] string? paramName = null)
+    {
+        if (value.IsEmpty)
+        {
+            ThrowEmpty(paramName);
+        }
+    }
+
     [DoesNotReturn]
     private static void ThrowDefault(string? paramName)
     {
@@ -123,4 +131,9 @@ internal static class Helpers
         throw new ArgumentException("Destination buffer is too small.", paramName);
     }
 
+    [DoesNotReturn]
+    private static void ThrowEmpty(string? paramName)
+    {
+        throw new ArgumentException("Value cannot be empty.", paramName);
+    }
 }

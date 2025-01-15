@@ -60,6 +60,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 
+using Bcl_Convert = System.Convert;
 using Bcl_HMACSHA256 = System.Security.Cryptography.HMACSHA256;
 using Bcl_SHA256 = System.Security.Cryptography.SHA256;
 
@@ -69,6 +70,11 @@ namespace Polyfill
     {
         public static unsafe string GetString(this Encoding encoding, ReadOnlySpan<byte> bytes)
         {
+            if (bytes.Length == 0)
+            {
+                return string.Empty;
+            }
+
             fixed (byte* ptr = bytes)
             {
                 return encoding.GetString(ptr, bytes.Length);
@@ -77,6 +83,11 @@ namespace Polyfill
 
         public static unsafe int GetByteCount(this Encoding encoding, ReadOnlySpan<char> chars)
         {
+            if (chars.Length == 0)
+            {
+                return 0;
+            }
+
             fixed (char* ptr = chars)
             {
                 return encoding.GetByteCount(ptr, chars.Length);
@@ -85,6 +96,11 @@ namespace Polyfill
 
         public static unsafe int GetBytes(this Encoding encoding, ReadOnlySpan<char> chars, Span<byte> bytes)
         {
+            if (chars.Length == 0)
+            {
+                return 0;
+            }
+
             fixed (char* charPtr = chars)
             fixed (byte* bytePtr = bytes)
             {
@@ -100,6 +116,14 @@ namespace Polyfill
             if (argument is null)
             {
                 ThrowArgumentNull(paramName);
+            }
+        }
+
+        public static void ThrowIfNullOrEmpty([NotNull] string? argument, [CallerArgumentExpression(nameof(argument))] string? paramName = null)
+        {
+            if (string.IsNullOrEmpty(argument))
+            {
+                ThrowNullOrEmpty(argument, paramName);
             }
         }
 
@@ -135,6 +159,26 @@ namespace Polyfill
         private static void ThrowLessThan(int value, int min, string? paramName)
         {
             throw new ArgumentOutOfRangeException(paramName, value, $"Value must be greater than or equal to {min}.");
+        }
+
+        [DoesNotReturn]
+        private static void ThrowNullOrEmpty(string? argument, string? paramName)
+        {
+            ThrowIfNull(argument, paramName);
+            throw new ArgumentException("Value cannot be empty.", paramName);
+        }
+    }
+
+    internal static class Convert
+    {
+        public static string ToBase64String(ReadOnlySpan<byte> bytes)
+        {
+            return Bcl_Convert.ToBase64String(bytes.ToArray());
+        }
+
+        public static byte[] FromBase64String(string base64)
+        {
+            return Bcl_Convert.FromBase64String(base64);
         }
     }
 
@@ -212,6 +256,13 @@ namespace Polyfill
             using var sha = Bcl_SHA256.Create();
             Hash.Compute(sha, source, destination);
             return HashSizeInBytes;
+        }
+
+        public static byte[] HashData(ReadOnlySpan<byte> source)
+        {
+            byte[] hash = new byte[HashSizeInBytes];
+            HashData(source, hash);
+            return hash;
         }
     }
 }
