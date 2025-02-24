@@ -107,16 +107,6 @@ namespace Polyfill
                 return encoding.GetBytes(charPtr, chars.Length, bytePtr, bytes.Length);
             }
         }
-
-        public static int GetHashCode(this string s, StringComparison comparison)
-        {
-            return comparison switch
-            {
-                StringComparison.Ordinal => StringComparer.Ordinal.GetHashCode(s),
-                StringComparison.OrdinalIgnoreCase => StringComparer.OrdinalIgnoreCase.GetHashCode(s),
-                _ => throw new NotSupportedException(),
-            };
-        }
     }
 
     internal static class ArgumentValidation
@@ -126,14 +116,6 @@ namespace Polyfill
             if (argument is null)
             {
                 ThrowArgumentNull(paramName);
-            }
-        }
-
-        public static void ThrowIfNullOrEmpty([NotNull] string? argument, [CallerArgumentExpression(nameof(argument))] string? paramName = null)
-        {
-            if (string.IsNullOrEmpty(argument))
-            {
-                ThrowNullOrEmpty(argument, paramName);
             }
         }
 
@@ -170,26 +152,6 @@ namespace Polyfill
         {
             throw new ArgumentOutOfRangeException(paramName, value, $"Value must be greater than or equal to {min}.");
         }
-
-        [DoesNotReturn]
-        private static void ThrowNullOrEmpty(string? argument, string? paramName)
-        {
-            ThrowIfNull(argument, paramName);
-            throw new ArgumentException("Value cannot be empty.", paramName);
-        }
-    }
-
-    internal static class Convert
-    {
-        public static string ToBase64String(ReadOnlySpan<byte> bytes)
-        {
-            return Bcl_Convert.ToBase64String(bytes.ToArray());
-        }
-
-        public static byte[] FromBase64String(string base64)
-        {
-            return Bcl_Convert.FromBase64String(base64);
-        }
     }
 
     internal static class RandomNumberGenerator
@@ -210,71 +172,6 @@ namespace Polyfill
             bytes.CopyTo(buffer);
         }
     }
-
-    internal static class Hash
-    {
-        private const int StreamBufferSizeInBytes = 4096;
-
-        public static void Compute(HashAlgorithm algorithm, ReadOnlySpan<byte> data, Span<byte> destination)
-        {
-            if (data.Length > StreamBufferSizeInBytes)
-            {
-                ComputeWithStream(algorithm, data, destination);
-                return;
-            }
-
-            byte[] hash = algorithm.ComputeHash(data.ToArray(), 0, data.Length);
-            hash.CopyTo(destination);
-        }
-
-        private static unsafe void ComputeWithStream(HashAlgorithm algorithm, ReadOnlySpan<byte> data, Span<byte> destination)
-        {
-            byte[] hash;
-
-            fixed (byte* dataPtr = data)
-            {
-                using var stream = new UnmanagedMemoryStream(dataPtr, data.Length);
-                hash = algorithm.ComputeHash(stream);
-            }
-
-            hash.CopyTo(destination);
-        }
-    }
-
-    internal static class HMACSHA256
-    {
-        public const int HashSizeInBits = 256;
-        public const int HashSizeInBytes = HashSizeInBits / 8;
-
-        public static int HashData(ReadOnlySpan<byte> key, ReadOnlySpan<byte> source, Span<byte> destination)
-        {
-            ThrowIfDestinationTooSmall(destination, HashSizeInBytes);
-            using var hmac = new Bcl_HMACSHA256(key.ToArray());
-            Hash.Compute(hmac, source, destination);
-            return HashSizeInBytes;
-        }
-    }
-
-    internal static class SHA256
-    {
-        public const int HashSizeInBits = 256;
-        public const int HashSizeInBytes = HashSizeInBits / 8;
-
-        public static int HashData(ReadOnlySpan<byte> source, Span<byte> destination)
-        {
-            ThrowIfDestinationTooSmall(destination, HashSizeInBytes);
-            using var sha = Bcl_SHA256.Create();
-            Hash.Compute(sha, source, destination);
-            return HashSizeInBytes;
-        }
-
-        public static byte[] HashData(ReadOnlySpan<byte> source)
-        {
-            byte[] hash = new byte[HashSizeInBytes];
-            HashData(source, hash);
-            return hash;
-        }
-    }
 }
 
 namespace CommonAnnotatedSecurityKeys
@@ -287,42 +184,6 @@ namespace CommonAnnotatedSecurityKeys
         private static partial Regex CompiledRegex()
         {
             return new Regex(RegexPattern, RegexFlags);
-        }
-    }
-}
-
-namespace System.Security.Cryptography
-{
-    internal static class CryptographicOperations
-    {
-        // WARNING: DO NOT MODIFY EXCEPT TO UPDATE TO A LATER VERSION OF THE
-        // CODE FROM THE BCL. THIS IS HARDER THAN IT MAY SEEM TO GET RIGHT!
-        //
-        // Source:
-        // https://github.com/dotnet/runtime/blob/354ec46a63440608bda18e2203bb5538e2f8eae6/src/libraries/System.Security.Cryptography/src/System/Security/Cryptography/CryptographicOperations.cs
-        [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
-        public static bool FixedTimeEquals(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
-        {
-            // NoOptimization because we want this method to be exactly as
-            // non-short-circuiting as written.
-            //
-            // NoInlining because the NoOptimization would get lost if the
-            // method got inlined.
-
-            if (left.Length != right.Length)
-            {
-                return false;
-            }
-
-            int length = left.Length;
-            int accum = 0;
-
-            for (int i = 0; i < length; i++)
-            {
-                accum |= left[i] - right[i];
-            }
-
-            return accum == 0;
         }
     }
 }

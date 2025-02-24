@@ -3,6 +3,7 @@
 
 global using static CommonAnnotatedSecurityKeys.Helpers;
 
+using System;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
@@ -45,45 +46,95 @@ internal static class Helpers
 
     public static int GetKeyLengthInBytes(int providerDataLengthInBytes)
     {
-        Debug.Assert(Is3ByteAligned(providerDataLengthInBytes), $"{nameof(providerDataLengthInBytes)} should have been validated to 3-byte aligned already.");
+        Debug.Assert(Is3ByteAligned(providerDataLengthInBytes),
+                     $"{nameof(providerDataLengthInBytes)} should have been validated to 3-byte aligned already.");
         int keyLengthInBytes = PaddedSecretEntropyInBytes + providerDataLengthInBytes + FixedKeyComponentSizeInBytes;
         Debug.Assert(Is3ByteAligned(keyLengthInBytes));
         return keyLengthInBytes;
     }
 
-    public static int GetHashLengthInBytes(int secretSizeInBytes, out int providerDataLengthInBytes)
+    public static SensitiveDataSize CharToSensitiveDataSize(char sensitiveDataSizeChar)
     {
-        providerDataLengthInBytes = secretSizeInBytes - PaddedSecretEntropyInBytes - FixedKeyComponentSizeInBytes;
-        int hashLengthInBytes = PaddedHmacSha256SizeInBytes + providerDataLengthInBytes + FixedHashComponentSizeInBytes;
-        Debug.Assert(Is3ByteAligned(providerDataLengthInBytes));
-        Debug.Assert(Is3ByteAligned(hashLengthInBytes));
-        return hashLengthInBytes;
+        return (SensitiveDataSize)(sensitiveDataSizeChar - 'A'); ;
     }
 
-    public static KeyKind CharToKind(char kindChar)
+    public static CaskKeyKind CharToKind(char kindChar)
     {
-        Debug.Assert(kindChar == 'A' || kindChar == 'H' || kindChar == 'I', "This is only meant to be called using the kind char of a known valid key.");
-        return (KeyKind)(kindChar - 'A');
+        Debug.Assert(kindChar == 'P' || kindChar == 'H',
+                     "This is only meant to be called using the kind char of a known valid key.");
+        return (CaskKeyKind)(kindChar - 'A');
     }
 
-    public static byte KindToByte(KeyKind kind)
+    public static byte KindToByte(CaskKeyKind kind)
     {
-        return (byte)((int)kind << KindReservedBits);
+        return (byte)((int)kind << CaskKindReservedBits);
+    }
+
+    public static byte ProviderKindToByte(string providerKind)
+    {
+        Debug.Assert(providerKind?.Length == 1, "Provider kind should be a single character.");
+
+        int base64Index;
+
+        const int uppercaseZIndex = 25; // 'Z' - 'A';
+        const int lowercaseZIndex = 51; // 'z' - 'a';
+
+
+        char providerKindChar = providerKind[0];
+        if (providerKindChar >= 'A' && providerKindChar <= 'Z')
+        {
+            base64Index = providerKindChar - 'A';
+        }
+        else if (providerKindChar >= 'a' && providerKindChar <= 'z')
+        {
+            base64Index = providerKindChar - 'a' + uppercaseZIndex;
+        }
+        else if (providerKindChar >= '0' && providerKindChar <= '9')
+        {
+            base64Index = providerKindChar - '0' + lowercaseZIndex;
+        }
+        else if (providerKindChar == '-')
+        {
+            base64Index = 62;
+        }
+        else
+        {
+            Debug.Assert(providerKindChar == '_', "Provider kind should be a valid Base64Url char.");
+            base64Index = 63;
+        }
+
+        return (byte)(base64Index << ProviderKindReservedBits);
+    }
+
+    /// <summary>
+    /// Converts a byte that encodes the key kind to the KeyKind enum.
+    /// Returns false if the reserved bits in that byte are non-zero.
+    /// </summary>
+    public static bool TryByteToSensitiveDataSize(byte value, out SensitiveDataSize size)
+    {
+        if ((value & SensitiveDataReservedMask) != 0)
+        {
+            size = default;
+            return false;
+        }
+
+        size = (SensitiveDataSize)(value);
+        return true;
     }
 
     /// <summary>
     /// Converts a byte that encodeds the key kind to the KeyKind enum.
     /// Returns false if the reserved bits in that byte are non-zero.
     /// </summary>
-    public static bool TryByteToKind(byte value, out KeyKind kind)
+    public static bool TryByteToKind(byte value, out CaskKeyKind kind)
     {
-        if ((value & KindReservedMask) != 0)
+        if ((value & CaskKindReservedMask) != 0)
         {
             kind = default;
             return false;
         }
 
-        kind = (KeyKind)(value >> KindReservedBits);
+        kind = (CaskKeyKind)(value >> CaskKindReservedBits);
         return true;
     }
 
@@ -125,31 +176,6 @@ internal static class Helpers
         return (value + multiple - 1) / multiple * multiple;
     }
 
-    public static void ThrowIfNotInitialized<T>(T value, [CallerArgumentExpression(nameof(value))] string? paramName = null)
-        where T : struct, IIsInitialized
-    {
-        if (!value.IsInitialized)
-        {
-            ThrowArgumentNotInitialized(paramName);
-        }
-    }
-
-    public static void ThrowIfNotPrimary(CaskKey value, [CallerArgumentExpression(nameof(value))] string? paramName = null)
-    {
-        if (!value.IsPrimary)
-        {
-            ThrowNotPrimary(paramName);
-        }
-    }
-
-    public static void ThrowIfNotHash(CaskKey value, [CallerArgumentExpression(nameof(value))] string? paramName = null)
-    {
-        if (!value.IsHash)
-        {
-            ThrowNotHash(paramName);
-        }
-    }
-
     public static void ThrowIfDestinationTooSmall<T>(Span<T> destination, int requiredSize, [CallerArgumentExpression(nameof(destination))] string? paramName = null)
     {
         if (destination.Length < requiredSize)
@@ -158,19 +184,6 @@ internal static class Helpers
         }
     }
 
-    public static void ThrowIfEmpty<T>(ReadOnlySpan<T> value, [CallerArgumentExpression(nameof(value))] string? paramName = null)
-    {
-        if (value.IsEmpty)
-        {
-            ThrowEmpty(paramName);
-        }
-    }
-
-    [DoesNotReturn]
-    private static void ThrowArgumentNotInitialized(string? paramName)
-    {
-        throw new ArgumentException("Value cannot be the default uninitialized struct value.", paramName);
-    }
 
     [DoesNotReturn]
     public static void ThrowOperationOnUninitializedInstance()
@@ -182,24 +195,6 @@ internal static class Helpers
     private static void ThrowDestinationTooSmall(string? paramName)
     {
         throw new ArgumentException("Destination buffer is too small.", paramName);
-    }
-
-    [DoesNotReturn]
-    private static void ThrowEmpty(string? paramName)
-    {
-        throw new ArgumentException("Value cannot be empty.", paramName);
-    }
-
-    [DoesNotReturn]
-    private static void ThrowNotPrimary(string? paramName)
-    {
-        throw new ArgumentException("Key is not a primary key.", paramName);
-    }
-
-    [DoesNotReturn]
-    private static void ThrowNotHash(string? paramName)
-    {
-        throw new ArgumentException("Key is not a hash.", paramName);
     }
 }
 

@@ -27,12 +27,28 @@ public readonly partial record struct CaskKey : IIsInitialized
     [MemberNotNullWhen(true, nameof(_key))]
     public bool IsInitialized => _key != null;
 
-    public KeyKind Kind
+    public CaskKeyKind Kind
     {
         get
         {
             ThrowIfNotInitialized();
-            return CharToKind(_key[KindCharIndex]);
+            return CharToKind(_key[CaskKindCharIndex]);
+        }
+    }
+
+    public int SensitiveDateSizeInBytes
+    {
+        get
+        {
+            ThrowIfNotInitialized();
+            SensitiveDataSize sensitiveDataSize = CharToSensitiveDataSize(_key[SensitiveDataSizeCharIndex]);
+            return sensitiveDataSize switch
+            {
+                SensitiveDataSize.Bits256 => 32,
+                SensitiveDataSize.Bits384 => 48,
+                SensitiveDataSize.Bits512 => 64,
+                _ => ThrowUnrecognizedSensitiveDataSize(sensitiveDataSize),
+            };
         }
     }
 
@@ -44,10 +60,6 @@ public readonly partial record struct CaskKey : IIsInitialized
             return Base64CharsToBytes(_key.Length);
         }
     }
-
-    public bool IsPrimary => Kind < KeyKind.Hash256Bit;
-
-    public bool IsHash => !IsPrimary;
 
     private CaskKey(string value)
     {
@@ -176,7 +188,7 @@ public readonly partial record struct CaskKey : IIsInitialized
     }
 
     // language=regex
-    private const string RegexPattern = """(^|[^A-Za-z0-9+/\-_])([A-Za-z0-9\-_]{4}){6,}JQQJ[A-Za-z0-9\-_]{16}($|[^A-Za-z0-9+/\-_])""";
+    private const string RegexPattern = """(^|[^A-Za-z0-9+\/\-_])[A-Za-z0-9\-_]{43}AJQQJ[A-Za-z0-9\-_]{5}(D|H|P)[A-Za-z0-9\-_]{23}[A-L][A-Za-e][A-X][A-Za-z0-7][A-Za-z0-9\-_]{3,27}($|[^A-Za-z0-9+\/\-_])""";
     private const RegexOptions RegexFlags = RegexOptions.Compiled | RegexOptions.ExplicitCapture | RegexOptions.CultureInvariant;
 
     [GeneratedRegex(RegexPattern, RegexFlags)]
@@ -186,5 +198,11 @@ public readonly partial record struct CaskKey : IIsInitialized
     private static void ThrowFormat()
     {
         throw new FormatException("Input is not a valid Cask key.");
+    }
+
+    [DoesNotReturn]
+    private static int ThrowUnrecognizedSensitiveDataSize(SensitiveDataSize sensitiveDataSize)
+    {
+        throw new InvalidOperationException($"Unexpected sensitive data size: {sensitiveDataSize}.");
     }
 }

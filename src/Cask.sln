@@ -36,13 +36,13 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Docs", "Docs", "{BD909936-A204-4B21-8356-EAAEE1958945}"
 	ProjectSection(SolutionItems) = preProject
 		..\docs\CSharp_ReleaseHistory.md = ..\docs\CSharp_ReleaseHistory.md
+		..\docs\GenerateKeyPseudoCode.md = ..\docs\GenerateKeyPseudoCode.md
 		..\docs\PrimaryKey.md = ..\docs\PrimaryKey.md
 		..\README.md = ..\README.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "DevDocs", "DevDocs", "{51A4B75A-58BC-4241-8A5C-50297D857233}"
 	ProjectSection(SolutionItems) = preProject
-		..\devdocs\GenerateHashPseudoCode.md = ..\devdocs\GenerateHashPseudoCode.md
 		..\devdocs\GenerateKeyPseudoCode.md = ..\devdocs\GenerateKeyPseudoCode.md
 		..\devdocs\Questions.md = ..\devdocs\Questions.md
 	EndProjectSection

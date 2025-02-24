@@ -1,6 +1,8 @@
 // Copyright (c) Microsoft. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
+using System.Buffers.Text;
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
 using Xunit;
@@ -9,67 +11,22 @@ using CSharpCask = CommonAnnotatedSecurityKeys.Cask;
 
 namespace CommonAnnotatedSecurityKeys.Tests;
 
+[ExcludeFromCodeCoverage]
 public class CSharpCaskTests : CaskTestsBase
 {
     public CSharpCaskTests() : base(new Implementation()) { }
 
     private sealed class Implementation : ICask
     {
-        public bool CompareHash(string candidateHash, byte[] derivationInput, string secret)
-        {
-            var candidateHashKey = CaskKey.Create(candidateHash);
-            var secretKey = CaskKey.Create(secret);
-            bool result = CSharpCask.CompareHash(candidateHashKey, derivationInput, secretKey);
-
-            string derivationInputString = Encoding.UTF8.GetString(derivationInput);
-            (string name, bool value)[] checks = [
-                ("ReadOnlySpan<byte>)", result),
-                ("string", CSharpCask.CompareHash(candidateHashKey, derivationInputString, secretKey)),
-                ("ReadOnlySpan<char>)", CSharpCask.CompareHash(candidateHashKey, derivationInputString.AsSpan(), secretKey)),
-            ];
-
-            if (!checks.All(c => c.value == result))
-            {
-                Assert.Fail(
-                    "Got different results from CompareHash with different forms of derivationInput"
-                    + Environment.NewLine
-                    + $"derivationInput: {derivationInputString}"
-                    + Environment.NewLine
-                    + string.Join(Environment.NewLine, checks.Select(c => $"  {c.name} -> {c.value}")));
-            }
-
-            return result;
-        }
-
-        public string GenerateHash(byte[] derivationInput, string secret)
-        {
-            var secretKey = CaskKey.Create(secret);
-            string result = CSharpCask.GenerateHash(derivationInput, secretKey).ToString();
-
-            string derivationInputString = Encoding.UTF8.GetString(derivationInput);
-            (string name, string value)[] checks = [
-                ("ReadOnlySpan<byte>)", result),
-                ("string", CSharpCask.GenerateHash(derivationInputString, secretKey).ToString()),
-                ("ReadOnlySpan<char>)", CSharpCask.GenerateHash(derivationInputString.AsSpan(), secretKey).ToString()),
-            ];
-
-            if (!checks.All(c => c.value == result))
-            {
-                Assert.Fail(
-                    "Got different results from GenerateHash with different forms of derivationInput"
-                    + Environment.NewLine
-                    + $"derivationInput: {derivationInputString}"
-                    + Environment.NewLine
-                    + string.Join(Environment.NewLine, checks.Select(c => $"  {c.name} -> {c.value}")));
-            }
-
-            return result;
-        }
-
         public string GenerateKey(string providerSignature,
+                                  string providerKind = "A",
+                                  int expiryInFiveMinuteIncrements = 0,
                                   string? reserved = null)
         {
-            CaskKey key = CSharpCask.GenerateKey(providerSignature, reserved);
+            CaskKey key = CSharpCask.GenerateKey(providerSignature,
+                                                 providerKind,
+                                                 expiryInFiveMinuteIncrements,
+                                                 reserved);
             return key.ToString();
         }
 
@@ -77,13 +34,28 @@ public class CSharpCaskTests : CaskTestsBase
         {
             bool result = CSharpCask.IsCask(key);
 
+            byte[] keyUtf8 = Encoding.UTF8.GetBytes(key);
+            byte[]? keyBytes = null;
+
+            try
+            {
+                keyBytes = Base64Url.DecodeFromUtf8(keyUtf8);
+            }
+            catch (FormatException)
+            {
+                // On receiving this exception, we have invalid base64 input.
+                // As a result, we will skip the IsCaskBytes check, which
+                // will throw for this condition.
+            }
+
             (string name, bool value)[] checks = [
                 ("Cask.IsCask(string)", result),
                 ("Cask.IsCask(ReadOnlySpan<char>)", CSharpCask.IsCask(key.AsSpan())),
-                ("Cask.IsCaskUtf8(ReadOnlySpan<byte>)", CSharpCask.IsCaskUtf8(Encoding.UTF8.GetBytes(key))),
+                ("Cask.IsCaskBytes(ReadOnlySpan<byte>)", keyBytes != null && CSharpCask.IsCaskBytes(keyBytes)),
+                ("Cask.IsCaskUtf8(ReadOnlySpan<byte>)", CSharpCask.IsCaskUtf8(keyUtf8)),
                 ("CaskKey.TryCreate(string)", CaskKey.TryCreate(key, out _)),
                 ("CaskKey.TryCreate(ReadOnlySpan<char>)", CaskKey.TryCreate(key.AsSpan(), out _)),
-                ("CaskKey.TryCreateUtf8(ReadOnlySpan<byte>)", CaskKey.TryCreateUtf8(Encoding.UTF8.GetBytes(key), out _)),
+                ("CaskKey.TryCreateUtf8(ReadOnlySpan<byte>)", CaskKey.TryCreateUtf8(keyUtf8, out _)),
             ];
 
             if (!checks.All(c => c.value == result))
