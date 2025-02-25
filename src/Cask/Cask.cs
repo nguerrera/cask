@@ -193,7 +193,7 @@ public static class Cask
         DateTimeOffset now = GetUtcNow();
         ValidateTimestamp(now);
         ReadOnlySpan<char> chars = [
-            Base64UrlChars[now.Year - 2024], // Years since 2024.
+            Base64UrlChars[now.Year - 2025], // Years since 2025.
             Base64UrlChars[now.Month - 1],   // Zero-indexed month.
             Base64UrlChars[now.Day - 1],     // Zero-indexed day.
             Base64UrlChars[now.Hour],        // Zero-indexed hour.
@@ -292,7 +292,7 @@ public static class Cask
 
     private static void ValidateTimestamp(DateTimeOffset now)
     {
-        if (now.Year < 2024 || now.Year > 2087)
+        if (now.Year < 2025 || now.Year > 2088)
         {
             ThrowInvalidYear();
         }
@@ -343,7 +343,7 @@ public static class Cask
     [DoesNotReturn]
     private static void ThrowInvalidYear()
     {
-        throw new InvalidOperationException("CASK requires the current year to be between 2024 and 2087.");
+        throw new InvalidOperationException("CASK requires the current year to be between 2025 and 2088.");
     }
 
     internal static Mock MockUtcNow(UtcNowFunc getUtcNow)

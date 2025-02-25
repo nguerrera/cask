@@ -333,19 +333,19 @@ public abstract class CaskTestsBase
     public void CaskSecrets_GenerateKey_DeterministicUsingMocks()
     {
         using Mock mockRandom = Cask.MockFillRandom(buffer => buffer.Fill(1));
-        using Mock mockTimestamp = Cask.MockUtcNow(() => new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        using Mock mockTimestamp = Cask.MockUtcNow(() => new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero));
 
         string key = Cask.GenerateKey("TEST", "M", 0, "ABCD");
         Assert.Equal("AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEAQJJQTESTMPABAQEBAQEBAQEBAQEBAQEBAAAAAAAAABCD", key);
     }
 
     [Theory]
-    [InlineData(2023), InlineData(2088)]
+    [InlineData(2024), InlineData(2089)]
     public void CaskSecrets_GenerateKey_InvalidTimestamps(int invalidYear)
     {
-        // The CASK standard timestamp is only valid from 2024 - 2087
-        // (where the base64-encoded character 'A' indicates 2024, and
-        // the last valid base64 character '_' indicates 2087.
+        // The CASK standard timestamp is only valid from 2025 - 2088
+        // (where the base64-encoded character 'A' indicates 2025, and
+        // the last valid base64 character '_' indicates 2088.
 
         // It is unnecessary to test every month since the code is dirt simple
         // and correctly only checks the year.
@@ -358,14 +358,14 @@ public abstract class CaskTestsBase
                                    expiryInFiveMinuteIncrements: 1, // Five minutes.
                                    providerData: "ABCD"));
 
-        Assert.Contains("2087", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("2088", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public void CaskSecrets_GenerateKey_ValidTimestamps()
     {
-        // Every year from 2024 - 2087 should produce a valid key. We trust that
-        // the CASK standard will be long dead by 2087 or perhaps simply all or
+        // Every year from 2025 - 2088 should produce a valid key. We trust that
+        // the CASK standard will be long dead by 2088 or perhaps simply all or
         // most programmers will be.
         for (int year = 0; year < 64; year++)
         {
@@ -374,7 +374,7 @@ public abstract class CaskTestsBase
             int hour = year % 24;
             int minute = year % 60;
 
-            var timestamp = new DateTimeOffset(2024 + year, 1 + month, 1 + day, hour, minute, second: 0, TimeSpan.Zero);
+            var timestamp = new DateTimeOffset(2025 + year, 1 + month, 1 + day, hour, minute, second: 0, TimeSpan.Zero);
             using Mock mock = Cask.MockUtcNow(() => timestamp);
 
             int expiryInFiveMinuteIncrements = 12 * 24 * 180; // 6 months.
