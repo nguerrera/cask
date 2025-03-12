@@ -43,94 +43,16 @@ internal static class Helpers
         return charLength % 4 == 0;
     }
 
-    public static int GetKeyLengthInBytes(int providerDataLengthInBytes)
+    public static int GetKeyLengthInBytes(int providerDataLengthInBytes, SecretSize secretSize)
     {
         Debug.Assert(Is3ByteAligned(providerDataLengthInBytes),
                      $"{nameof(providerDataLengthInBytes)} should have been validated to 3-byte aligned already.");
-        int keyLengthInBytes = PaddedSecretEntropyInBytes + providerDataLengthInBytes + FixedKeyComponentSizeInBytes;
-        Debug.Assert(Is3ByteAligned(keyLengthInBytes));
-        return keyLengthInBytes;
-    }
 
-    public static SensitiveDataSize CharToSensitiveDataSize(char sensitiveDataSizeChar)
-    {
-        return (SensitiveDataSize)(sensitiveDataSizeChar - 'A'); ;
-    }
 
-    public static CaskKeyKind CharToKind(char kindChar)
-    {
-        Debug.Assert(kindChar == 'D' || kindChar == 'H' || kindChar == 'P',
-                     "This is only meant to be called using the kind char of a known valid key.");
-        return (CaskKeyKind)(kindChar - 'A');
-    }
+        int secretSizeInBytes = (int)secretSize * 16;
+        int paddedSecretSizeInBytes = RoundUpTo3ByteAlignment(secretSizeInBytes);
 
-    public static byte KindToByte(CaskKeyKind kind)
-    {
-        return (byte)((int)kind << CaskKindReservedBits);
-    }
-
-    public static byte ProviderKindToByte(char providerKind)
-    {
-        int base64Index;
-
-        const int uppercaseZIndex = 'Z' - 'A';
-        const int lowercaseZIndex = 'z' - 'a';
-
-        if (providerKind >= 'A' && providerKind <= 'Z')
-        {
-            base64Index = providerKind - 'A';
-        }
-        else if (providerKind >= 'a' && providerKind <= 'z')
-        {
-            base64Index = providerKind - 'a' + uppercaseZIndex;
-        }
-        else if (providerKind >= '0' && providerKind <= '9')
-        {
-            base64Index = providerKind - '0' + lowercaseZIndex;
-        }
-        else if (providerKind == '-')
-        {
-            base64Index = 62;
-        }
-        else
-        {
-            Debug.Assert(providerKind == '_', "Provider kind should be a valid Base64Url char.");
-            base64Index = 63;
-        }
-
-        return (byte)(base64Index << ProviderKindReservedBits);
-    }
-
-    /// <summary>
-    /// Converts a byte that encodes the key kind to the KeyKind enum.
-    /// Returns false if the reserved bits in that byte are non-zero.
-    /// </summary>
-    public static bool TryByteToSensitiveDataSize(byte value, out SensitiveDataSize size)
-    {
-        if ((value & SensitiveDataReservedMask) != 0)
-        {
-            size = default;
-            return false;
-        }
-
-        size = (SensitiveDataSize)(value);
-        return true;
-    }
-
-    /// <summary>
-    /// Converts a byte that encodeds the key kind to the KeyKind enum.
-    /// Returns false if the reserved bits in that byte are non-zero.
-    /// </summary>
-    public static bool TryByteToKind(byte value, out CaskKeyKind kind)
-    {
-        if ((value & CaskKindReservedMask) != 0)
-        {
-            kind = default;
-            return false;
-        }
-
-        kind = (CaskKeyKind)(value >> CaskKindReservedBits);
-        return kind is CaskKeyKind.DerivedKey or CaskKeyKind.HMAC or CaskKeyKind.PrimaryKey;
+        return paddedSecretSizeInBytes + providerDataLengthInBytes + FixedKeyComponentSizeInBytes;
     }
 
     public static bool IsValidForBase64Url(string value)
@@ -178,7 +100,6 @@ internal static class Helpers
             ThrowDestinationTooSmall(paramName);
         }
     }
-
 
     [DoesNotReturn]
     public static void ThrowOperationOnUninitializedInstance()

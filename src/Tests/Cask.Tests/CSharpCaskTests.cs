@@ -2,7 +2,6 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 using System.Buffers.Text;
-using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
 using Xunit;
@@ -18,14 +17,14 @@ public class CSharpCaskTests : CaskTestsBase
     private sealed class Implementation : ICask
     {
         public string GenerateKey(string providerSignature,
-                                  char providerKind,
-                                  int expiryInFiveMinuteIncrements = 0,
-                                  string? reserved = null)
+                                  char providerKind = 'A',
+                                  string? reserved = null,
+                                  SecretSize secretSize = SecretSize.Bits256)
         {
             CaskKey key = CSharpCask.GenerateKey(providerSignature,
                                                  providerKind,
-                                                 expiryInFiveMinuteIncrements,
-                                                 reserved);
+                                                 reserved,
+                                                 secretSize);
             return key.ToString();
         }
 
@@ -47,7 +46,7 @@ public class CSharpCaskTests : CaskTestsBase
                 // will throw for this condition.
             }
 
-            if (key.Any((c) => !s_validBase64Url.Contains(c)))
+            if (key.Any((c) => !s_printableBase64UrlCharacters.Contains(c)))
             {
                 // This condition will only occur if the input passed to
                 // `Base64Url.DecodeFromUtf8` included characters (such as 

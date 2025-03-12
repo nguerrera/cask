@@ -23,7 +23,7 @@ internal static class GenerateCommand
 
         for (int i = 0; i < options.Count; i++)
         {
-            CaskKey key = Cask.GenerateKey(providerSignature, 'A', 0, providerData);
+            CaskKey key = Cask.GenerateKey(providerSignature, 'A', providerData, SecretSize.Bits256);
             string validity = Cask.IsCask(key.ToString()) ? "Valid Key   " : "INVALID KEY ";
             Console.WriteLine($"{validity}: {key}");
         }

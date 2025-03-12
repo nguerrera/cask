@@ -10,7 +10,7 @@ using System.Text.RegularExpressions;
 namespace CommonAnnotatedSecurityKeys;
 
 /// <summary>
-/// Represents a Cask key or hash.
+/// Represents a Cask secret.
 /// </summary>
 public readonly partial record struct CaskKey : IIsInitialized
 {
@@ -27,28 +27,12 @@ public readonly partial record struct CaskKey : IIsInitialized
     [MemberNotNullWhen(true, nameof(_key))]
     public bool IsInitialized => _key != null;
 
-    public CaskKeyKind Kind
+    public SecretSize SecretSize
     {
         get
         {
             ThrowIfNotInitialized();
-            return CharToKind(_key[CaskKindCharIndex]);
-        }
-    }
-
-    public int SensitiveDateSizeInBytes
-    {
-        get
-        {
-            ThrowIfNotInitialized();
-            SensitiveDataSize sensitiveDataSize = CharToSensitiveDataSize(_key[SensitiveDataSizeCharIndex]);
-            return sensitiveDataSize switch
-            {
-                SensitiveDataSize.Bits256 => 32,
-                SensitiveDataSize.Bits384 => 48,
-                SensitiveDataSize.Bits512 => 64,
-                _ => ThrowUnrecognizedSensitiveDataSize(sensitiveDataSize),
-            };
+            return Cask.ExtractSensitiveDataSizeFromKeyChars(_key.AsSpan(), out Range _);
         }
     }
 
@@ -188,7 +172,7 @@ public readonly partial record struct CaskKey : IIsInitialized
     }
 
     // language=regex
-    private const string RegexPattern = """(^|[^A-Za-z0-9+\/\-_])[A-Za-z0-9\-_]{43}AQJJQ[A-Za-z0-9\-_]{5}(D|H|P)[A-Za-z0-9\-_]{23}[A-L][A-Za-e][A-X][A-Za-z0-7][A-Za-z0-9\-_]{3,27}($|[^A-Za-z0-9+\/\-_])""";
+    private const string RegexPattern = """(^|[^A-Za-z0-9+\/\-_])([A-Za-z0-9\-_]{4}([A-Za-z0-9\-_]{20}){1,3}|[A-Za-z0-9\-_]{88})?QJJQ[A-Za-z0-9\-_][A-L][A-Za-e][A-X][A-Za-z0-7][B-E][A-E][A-Za-z0-9\-_]([A-Za-z0-9\-_]{4}){0,4}[A-Za-z0-9\-_]{24}([^A-Za-z0-9+\/\-_]|$)""";
     private const RegexOptions RegexFlags = RegexOptions.Compiled | RegexOptions.ExplicitCapture | RegexOptions.CultureInvariant;
 
     [GeneratedRegex(RegexPattern, RegexFlags)]
@@ -198,11 +182,5 @@ public readonly partial record struct CaskKey : IIsInitialized
     private static void ThrowFormat()
     {
         throw new FormatException("Input is not a valid Cask key.");
-    }
-
-    [DoesNotReturn]
-    private static int ThrowUnrecognizedSensitiveDataSize(SensitiveDataSize sensitiveDataSize)
-    {
-        throw new InvalidOperationException($"Unexpected sensitive data size: {sensitiveDataSize}.");
     }
 }

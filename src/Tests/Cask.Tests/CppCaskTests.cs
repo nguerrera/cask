@@ -1,7 +1,6 @@
 // Copyright (c) Microsoft. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -42,8 +41,8 @@ public class CppCaskTests : CaskTestsBase
     {
         public string GenerateKey(string providerSignature,
                                   char providerKeyKind,
-                                  int expiryInFiveMinuteIncrements = 0,
-                                  string? providerData = null)
+                                  string? providerData = null,
+                                  SecretSize secretSize = SecretSize.Bits256)
         {
             int size = NativeMethods.Cask_GenerateKey(providerSignature, providerKeyKind, providerData, null, 0);
             byte[] bytes = new byte[size];
