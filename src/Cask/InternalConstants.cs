@@ -32,9 +32,32 @@ internal static partial class InternalConstants
     public const int CaskSignatureSizeInBytes = 3;
 
     /// <summary>
+    /// The number of bytes used to express year, month, day, and hour
+    /// components of the key allocation timestamp.
+    /// </summary>
+    public const int YearMonthDayHourSizeInBytes = 3;
+
+    /// <summary>
+    /// The number of bytes used to express the minutes component of the key
+    /// allocation timestamp, the sensitive data size, the optional provider
+    /// data size, and the provider key kind.
+    /// </summary>
+    public const int MinuteSizesAndKeyKindSizeInBytes = 3;
+
+    /// <summary>
     /// The number of bytes in a provider signature.
     /// </summary>
     public const int ProviderSignatureSizeInBytes = 3;
+
+    /// <summary>
+    /// The number of bytes per encoded secret size chunk.
+    /// </summary>
+    public const int SecretChunkSizeInBytes = 16;
+
+    /// <summary>
+    /// The number of bytes per encoded optional data size chunk.
+    /// </summary>
+    public const int OptionalDataChunkSizeInBytes = 3;
 
     /// <summary>
     /// The number of bytes for the non-sensitive, unique correlating id of the secret.
@@ -63,13 +86,11 @@ internal static partial class InternalConstants
     public const int MaxStackAlloc = 256;
 
     /// <summary>
-    /// The range of chars in a base64-encoded key that hold the Cask signature.
+    /// The integer offset (9) of the sensitive data size relative to the
+    /// starting index of the Cask signature in a base64-encoded secret. This
+    /// value consists of the length of the CASK signature and the length of the
+    /// encoded timestamp (which dedicates a character to a year, month, day,
+    /// hour and minute component).
     /// </summary>
-    public static Range CaskSignatureCharRange => 44..48;
-
-    /// <summary>
-    /// The integer offset of the sensitive data size relative to the
-    /// Cask signature in a base64-encoded secret.
-    /// </summary>
-    public static int SecretSizeOffsetFromCaskSignatureChar => 5;
+    public static int SecretSizeOffsetFromCaskSignatureOffset => CaskSignature.Length + "YMDHM".Length;
 }

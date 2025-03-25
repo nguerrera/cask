@@ -35,13 +35,15 @@ public abstract class CaskTestsBase
     [InlineData(SecretSize.Bits128), InlineData(SecretSize.Bits256), InlineData(SecretSize.Bits384), InlineData(SecretSize.Bits512)]
     public void CaskSecrets_IsCask(SecretSize secretSize)
     {
-
-        string key = Cask.GenerateKey(providerSignature: "TEST",
+        for (int optionalDataChunks = 0; optionalDataChunks <= 4; optionalDataChunks++)
+        {
+            string key = Cask.GenerateKey(providerSignature: "TEST",
                                       providerKeyKind: 'M',
-                                      providerData: "_NG_",
+                                      providerData: new string('-', optionalDataChunks * 4),
                                       secretSize);
 
-        IsCaskVerifySuccess(key);
+            IsCaskVerifySuccess(key);
+        }
     }
 
     [Theory]
@@ -103,19 +105,21 @@ public abstract class CaskTestsBase
             Assert.Equal(SecretSize.Bits128, secretSize);
         }
 
-        // The sensitive data size encoding is simply a count of 16-byte segments
-        // of secret data. The CASK standard allows for 1-4 segments.
+        // The secret size encoding is simply a count of 16-byte segments of
+        // secret entropy or other sensitive data. The CASK standard allows for
+        // 1-4 segments (comprising 128-bit, 256-bit, 384-bit or 512-bit keys).
         int secretSizeInBytes = (int)secretSize * 16;
 
         // Because CASK enforces 3-byte aligment to allow for fixed readability
-        // in encoded form and convenient bytewise access, the number of bytes of
-        // sensitive in a CASK key must be padded for 16-, 32- and 64-byte secrets.
+        // in encoded form and convenient bytewise access, the number of bytes
+        // of sensitive in a CASK key must be padded for 16-, 32- and 64-byte
+        // secrets. A 48-byte secret is already aligned on a 3-byte boundary and
+        // therefore is not padded.
         int paddedSecretSizeInBytes = (secretSizeInBytes + 3 - 1) / 3 * 3;
 
-        // A 384-bit secret will have not padding. For other sizes, it may be
-        // useful to ensure that the zero padding is present, for example, to
-        // avoid false positives. This is easily accomplished in the bytewise
-        // form.
+        // A 384-bit secret has no padding. For other sizes, it may be useful to
+        // verify that the zero padding is present when validating keys. This is
+        // easily accomplished in the bytewise form.
         int paddingInBytes = paddedSecretSizeInBytes - secretSizeInBytes;
         for (int i = 0; i < paddingInBytes; i++)
         {
@@ -325,78 +329,169 @@ public abstract class CaskTestsBase
         new string('-', MaxKeyLengthInChars + 1),
      ];
 
-    [Fact]
-    public void CaskSecrets_IsCask_InvalidKey_InvalidCaskSignature()
+    [Theory]
+    [InlineData(SecretSize.Bits128), InlineData(SecretSize.Bits256), InlineData(SecretSize.Bits384), InlineData(SecretSize.Bits512)]
+    public void CaskSecrets_IsCask_InvalidKey_InvalidCaskSignature(SecretSize secretSize)
     {
         string key = Cask.GenerateKey("TEST",
                                       providerKeyKind: 'G',
-                                      providerData: "-__-");
-        Span<char> keyChars = key.ToCharArray().AsSpan();
-        Span<char> caskSignatureBytes = "QJJQ".ToCharArray().AsSpan();
+                                      providerData: "-__-",
+                                      secretSize);
 
-        bool valid;
+        int secretSizeInBytes = (int)secretSize * 16;
+        int paddedSecretSizeInBytes = RoundUpTo3ByteAlignment(secretSizeInBytes);
+        int paddedSecretSizeInChars = paddedSecretSizeInBytes / 3 * 4;
 
         for (int i = 0; i < 4; i++)
         {
-            // Reset the CASK fixed signature.
-            caskSignatureBytes.CopyTo(keyChars[CaskSignatureCharRange]);
+            Span<char> modifiedKeyChars = key.ToCharArray().AsSpan();
+            Span<char> destination = modifiedKeyChars;
 
             // Ensure our starting key is valid.
-            key = keyChars.ToString();
-            IsCaskVerifySuccess(key);
+            IsCaskVerifySuccess(destination.ToString());
+
+            destination = destination[paddedSecretSizeInChars..];
 
             // Change one byte of the CASK fixed signature.
-            keyChars[CaskSignatureCharRange][i] = '-';
+            destination[i] = '-';
 
             // Ensure our invalidated key fails the IsCask check.
-            key = keyChars.ToString();
-            valid = Cask.IsCask(key);
-            Assert.False(valid, $"'IsCask' unexpectedly succeeded after modifying CASK signature range: {key}");
+            string modifiedKey = modifiedKeyChars.ToString();
+            bool valid = Cask.IsCask(modifiedKey);
+            Assert.False(valid, $"'IsCask' unexpectedly succeeded after modifying CASK signature range: {modifiedKey}");
 
-            IsCaskVerifyFailure(key);
+            IsCaskVerifyFailure(modifiedKey);
         }
     }
 
     [Theory]
-    [InlineData(SecretSize.Bits128 - 1)]
-    [InlineData(SecretSize.Bits512 + 1)]
-    public void CaskSecrets_IsCask_InvalidKey_InvalidSecretSize(SecretSize secretSize)
+    [InlineData(SecretSize.Bits128), InlineData(SecretSize.Bits256), InlineData(SecretSize.Bits384), InlineData(SecretSize.Bits512)]
+    public void CaskSecrets_IsCask_InvalidSecretSize(SecretSize secretSize)
     {
-        Assert.Throws<ArgumentException>(
-            () => Cask.GenerateKey("TEST",
-                                   providerKeyKind: '_',
-                                   providerData: "oOOo",
-                                   secretSize));
-    }
+        string key = Cask.GenerateKey("TEST",
+                                      providerKeyKind: 'S',
+                                      providerData: "-00-",
+                                      secretSize);
 
-    [Theory]
-    [InlineData(0)]
-    [InlineData('?')]
-    public void CaskSecrets_IsCask_InvalidKey_InvalidProviderKind(char providerKeyKind)
-    {
-        foreach (SecretSize secretSize in CaskTestsBase.AllSecretSizes)
+        bool valid = Cask.IsCask(key);
+        Assert.True(valid, $"'IsCask' unexpectedly failed with key: {key}");
+
+        foreach (SecretSize invalidSecretSize in new[] { SecretSize.None, SecretSize.Bits512 + 1 })
         {
-            Assert.Throws<ArgumentException>(
-                () => Cask.GenerateKey("TEST",
-                                       providerKeyKind,
-                                       providerData: "OooOOooOOooO"));
+            int secretSizeInBytes = (int)secretSize * 16;
+            int paddedSecretSizeInBytes = (secretSizeInBytes + 3 - 1) / 3 * 3;
+            int paddedSecretSizeInChars = (paddedSecretSizeInBytes / 3) * 4;
+            int caskSignatureEndCharOffset = paddedSecretSizeInChars + 4;
+
+            // We add five to skip the five-character YMDHM timestamp.
+            int secretSizeCharOffset = caskSignatureEndCharOffset + "YMDHM".Length;
+
+            var encodedSecretSize = (SecretSize)(key[secretSizeCharOffset] - 'A');
+            Assert.Equal(secretSize, encodedSecretSize);
+
+            Span<char> destination = key.ToCharArray().AsSpan();
+            destination[secretSizeCharOffset] = (char)(invalidSecretSize + 'A');
+
+            string modifiedKey = destination.ToString();
+            valid = Cask.IsCask(modifiedKey);
+            Assert.False(valid, $"'IsCask' unexpectedly succeeded after modifying CASK signature range: {modifiedKey}");
+
+            IsCaskVerifyFailure(modifiedKey);
         }
     }
 
-    [Fact]
-    public void CaskSecrets_IsCask_InvalidKey_InvalidForBase64ProviderKind()
+    [Theory]
+    [InlineData(SecretSize.Bits128), InlineData(SecretSize.Bits256), InlineData(SecretSize.Bits384), InlineData(SecretSize.Bits512)]
+    public void CaskSecrets_IsCask_InvalidProviderDataSize(SecretSize secretSize)
     {
-        for (char ch = (char)0; ch < char.MaxValue; ch++)
+        string providerData = new('O', 12);
+        string key = Cask.GenerateKey("TEST",
+                                      providerKeyKind: 'P',
+                                      providerData,
+                                      secretSize);
+
+        bool valid = Cask.IsCask(key);
+        Assert.True(valid, $"'IsCask' unexpectedly failed with key: {key}");
+
+        for (int i = 5; i <= 64; i++)
         {
-            if (s_printableBase64UrlCharacters.Contains(ch))
+            int secretSizeInBytes = (int)secretSize * 16;
+            int paddedSecretSizeInBytes = (secretSizeInBytes + 3 - 1) / 3 * 3;
+            int paddedSecretSizeInChars = (paddedSecretSizeInBytes / 3) * 4;
+            int caskSignatureEndCharOffset = paddedSecretSizeInChars + 4;
+
+            // We add five to skip the five-character YMDHM timestamp.
+            int secretSizeCharOffset = caskSignatureEndCharOffset + "YMDHM".Length;
+            int optionalDataSizeCharOffset = secretSizeCharOffset + 1;
+
+            int encodedProviderDataSizeInBytes = (key[optionalDataSizeCharOffset] - 'A') * 3;
+            int encodedProviderDataSizeInChars = encodedProviderDataSizeInBytes / 3 * 4;
+            Assert.Equal(providerData.Length, encodedProviderDataSizeInChars);
+
+            Span<char> destination = key.ToCharArray().AsSpan();
+            destination[optionalDataSizeCharOffset] = (char)(i + 'A');
+
+            string modifiedKey = destination.ToString();
+            valid = Cask.IsCask(modifiedKey);
+            Assert.False(valid, $"'IsCask' unexpectedly succeeded after modifying CASK signature range: {modifiedKey}");
+
+            IsCaskVerifyFailure(modifiedKey);
+        }
+    }
+
+    [Theory]
+    [InlineData(SecretSize.Bits128), InlineData(SecretSize.Bits256), InlineData(SecretSize.Bits384), InlineData(SecretSize.Bits512)]
+    public void CaskSecrets_IsCask_MismatchedProviderDataSize(SecretSize secretSize)
+    {
+        int maxProviderDataThreeByteChunks = 4;
+
+        for (int optionalDataSize = 0; optionalDataSize < maxProviderDataThreeByteChunks; optionalDataSize++)
+        {
+            string providerData = new('O', optionalDataSize * 4);
+            string key = Cask.GenerateKey("TEST",
+                                          providerKeyKind: 'P',
+                                          providerData,
+                                          secretSize);
+
+            bool valid = Cask.IsCask(key);
+            Assert.True(valid, $"'IsCask' unexpectedly failed with key: {key}");
+
+            for (int modifiedOptionalDataSize = 0; modifiedOptionalDataSize < 4; modifiedOptionalDataSize++)
             {
-                continue;
-            }
+                if (modifiedOptionalDataSize == optionalDataSize)
+                {
+                    // We only test scenarios where we are replacing the encoded
+                    // value with a different value.
+                    continue;
+                }
 
-            Assert.Throws<ArgumentException>(
-                () => Cask.GenerateKey("TEST",
-                                       providerKeyKind: ch,
-                                       providerData: "OooOOooOOooO"));
+                int secretSizeInBytes = (int)secretSize * 16;
+                int paddedSecretSizeInBytes = (secretSizeInBytes + 3 - 1) / 3 * 3;
+                int paddedSecretSizeInChars = (paddedSecretSizeInBytes / 3) * 4;
+                int caskSignatureEndCharOffset = paddedSecretSizeInChars + 4;
+
+                // We add five to skip the five-character YMDHM timestamp.
+                int secretSizeCharOffset = caskSignatureEndCharOffset + "YMDHM".Length;
+                int optionalDataSizeCharOffset = secretSizeCharOffset + 1;
+
+                int encodedProviderDataSizeInBytes = (key[optionalDataSizeCharOffset] - 'A') * 3;
+                int encodedProviderDataSizeInChars = encodedProviderDataSizeInBytes / 3 * 4;
+                Assert.Equal(providerData.Length, encodedProviderDataSizeInChars);
+
+                Span<char> destination = key.ToCharArray().AsSpan();
+                destination[optionalDataSizeCharOffset] = (char)(modifiedOptionalDataSize + 'A');
+
+                string modifiedKey = destination.ToString();
+                valid = Cask.IsCask(modifiedKey);
+                Assert.False(valid, $"'IsCask' unexpectedly succeeded after modifying CASK signature range: {modifiedKey}");
+
+                // This subtle test is a case where the regex will not catch the
+                // fact that the key is invalid. Doing so would require building
+                // regexes that are tuned for specific encoded optional data
+                // sizes. This approach, in concert with the range of sensitive
+                // component sizes, would result in many discrete patterns.
+                IsCaskVerifyFailure(modifiedKey, expectedRegexIsMatchResult: true);
+            }
         }
     }
 
@@ -406,6 +501,7 @@ public abstract class CaskTestsBase
         string key = Cask.GenerateKey("TEST",
                                       providerKeyKind: 'X',
                                       providerData: "UNALIGN_") + "-";
+
         bool valid = Cask.IsCask(key);
         Assert.False(valid, $"'IsCask' unexpectedly succeeded with key that was not aligned to 4 chars: {key}");
     }
@@ -423,6 +519,30 @@ public abstract class CaskTestsBase
     }
 
     [Fact]
+    public void CaskSecrets_IsCask_InvalidKey_LengthOfNinetyBytes()
+    {
+        string providerData = new('T', 16);
+        string modifiedProviderData = new('T', 20);
+
+        string key = Cask.GenerateKey(providerSignature: "TEST",
+                                      providerKeyKind: '-',
+                                      providerData,
+                                      SecretSize.Bits384);
+
+        bool valid = Cask.IsCask(key);
+        Assert.True(valid, $"'IsCask' unexpectedly failed with key: {key}");
+
+#if NET8_0_OR_GREATER
+        key = key.Replace(providerData, modifiedProviderData, StringComparison.Ordinal);
+#else
+        key = key.Replace(providerData, modifiedProviderData);
+#endif
+
+        valid = Cask.IsCask(key);
+        Assert.False(valid, $"'IsCask' unexpectedly succeeded with key that has 15 bytes of optional data: {key}");
+    }
+
+    [Fact]
     public void CaskSecrets_IsCask_InvalidKey_InvalidBase64Url()
     {
         string key = Cask.GenerateKey(providerSignature: "TEST",
@@ -433,17 +553,65 @@ public abstract class CaskTestsBase
         Assert.False(valid, $"IsCask' unexpectedly succeeded with key that was not valid URL-Safe Base64: {key}");
     }
 
-    [Fact]
-    public void CaskSecrets_GenerateKey_Basic()
+    [Theory]
+    [InlineData(SecretSize.Bits128), InlineData(SecretSize.Bits256), InlineData(SecretSize.Bits384), InlineData(SecretSize.Bits512)]
+    public void CaskSecrets_GenerateKey_Basic(SecretSize secretSize)
     {
-        string key = Cask.GenerateKey(providerSignature: "TEST",
-                                      providerKeyKind: 'Q',
-                                      providerData: "ABCD");
+        for (int optionalDataChunks = 0; optionalDataChunks <= 4; optionalDataChunks++)
+        {
+            string key = Cask.GenerateKey(providerSignature: "TEST",
+                                          providerKeyKind: 'Q',
+                                          providerData: new string('x', optionalDataChunks * 4),
+                                          secretSize);
 
-        byte[] keyBytes = Base64Url.DecodeFromChars(key.AsSpan());
-        Assert.True(keyBytes.Length % 3 == 0, "'GenerateKey' output wasn't aligned on a 3-byte boundary.");
+            byte[] keyBytes = Base64Url.DecodeFromChars(key.AsSpan());
+            Assert.True(keyBytes.Length % 3 == 0, "'GenerateKey' output wasn't aligned on a 3-byte boundary.");
 
-        IsCaskVerifySuccess(key);
+            IsCaskVerifySuccess(key);
+        }
+    }
+
+    [Theory]
+    [InlineData(SecretSize.Bits128 - 1)]
+    [InlineData(SecretSize.Bits512 + 1)]
+    public void CaskSecrets_GenerateKey_InvalidKey_InvalidSecretSize(SecretSize secretSize)
+    {
+        Assert.Throws<ArgumentException>(
+            () => Cask.GenerateKey("TEST",
+                                   providerKeyKind: '_',
+                                   providerData: "oOOo",
+                                   secretSize));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData('?')]
+    public void CaskSecrets_GenerateKey_InvalidKey_InvalidProviderKind(char providerKeyKind)
+    {
+        foreach (SecretSize secretSize in CaskTestsBase.AllSecretSizes)
+        {
+            Assert.Throws<ArgumentException>(
+                () => Cask.GenerateKey("TEST",
+                                       providerKeyKind,
+                                       providerData: "OooOOooOOooO"));
+        }
+    }
+
+    [Fact]
+    public void CaskSecrets_GenerateKey_InvalidKey_InvalidForBase64ProviderKind()
+    {
+        for (char ch = (char)0; ch < char.MaxValue; ch++)
+        {
+            if (s_printableBase64UrlCharacters.Contains(ch))
+            {
+                continue;
+            }
+
+            Assert.Throws<ArgumentException>(
+                () => Cask.GenerateKey("TEST",
+                                       providerKeyKind: ch,
+                                       providerData: "OooOOooOOooO"));
+        }
     }
 
     [Theory]
@@ -550,8 +718,8 @@ public abstract class CaskTestsBase
             string b = Base64UrlChars;
             string expected = $"{b[year]}{b[month]}{b[day]}{b[hour]}{b[minute]}";
 
-            int secretSizeInBytes = (int)secretSize * 16;
-            int paddedSecretSizeInChars = RoundUpTo3ByteAlignment(secretSizeInBytes) / 3 * 4;
+            int entropyInBytes = (int)secretSize * 16;
+            int paddedSecretSizeInChars = RoundUpTo3ByteAlignment(entropyInBytes) / 3 * 4;
             int timestampCharOffset = paddedSecretSizeInChars + CaskSignatureUtf8.Length;
             Range timestampCharRange = timestampCharOffset..(timestampCharOffset + 5);
 
@@ -570,11 +738,19 @@ public abstract class CaskTestsBase
         Assert.True(Cask.IsCaskBytes(keyBytes), $"'IsCask(byte[])' failed for: {key}'.");
     }
 
-    private void IsCaskVerifyFailure(string key)
+    private void IsCaskVerifyFailure(string key, bool expectedRegexIsMatchResult = false)
     {
         // Negative test cases.
         Assert.False(Cask.IsCask(key), $"'IsCask(string)' unexpectedly succeeded for: {key}");
-        Assert.False(CaskKey.Regex.IsMatch(key), $"'CaskKey.Regex.IsMatch' unexpectedly succeeded for: {key}");
+
+        if (expectedRegexIsMatchResult)
+        {
+            Assert.True(CaskKey.Regex.IsMatch(key), $"'CaskKey.Regex.IsMatch' unexpectedly failed for: {key}");
+        }
+        else
+        {
+            Assert.False(CaskKey.Regex.IsMatch(key), $"'CaskKey.Regex.IsMatch' unexpectedly succeeded for: {key}");
+        }
 
         byte[] keyBytes;
 

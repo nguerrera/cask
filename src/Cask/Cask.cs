@@ -13,7 +13,8 @@ namespace CommonAnnotatedSecurityKeys;
 public static class Cask
 {
     /// <summary>
-    /// Validates that the provided string is a valid Cask key in URL-safe base64-encoded form.
+    /// Validates that the provided string is a valid Cask key in URL-safe
+    /// base64-encoded form.
     /// </summary>
     public static bool IsCask(string key)
     {
@@ -22,7 +23,8 @@ public static class Cask
     }
 
     /// <summary>
-    /// Validates that the provided UTF16-encoded text sequence represents a valid Cask key.
+    /// Validates that the provided UTF16-encoded text sequence represents a
+    /// valid Cask key.
     /// </summary>
     /// <param name="key"></param>
     public static bool IsCask(ReadOnlySpan<char> key)
@@ -77,6 +79,17 @@ public static class Cask
             return false;
         }
 
+        if (keyBytes.Length > Max384BitKeyLengthInBytes && keyBytes.Length < Min512BitKeyLengthInBytes)
+        {
+            // There is a 3-byte gap in valid keys lengths between the 384-bit
+            // and 512-bit sizes. This early check short-circuits validation to
+            // avoid length check assertions in the rest of the method.
+            // Validation logic later in the method that verifies the encoding
+            // of the optional data size and the literal size of the optional
+            // data itself would also fail this corner case situation.
+            return false;
+        }
+
         SecretSize secretSize = InferSecretSizeFromByteLength(keyBytes.Length);
         Range caskSignatureByteRange = ComputeSignatureByteRange(secretSize);
 
@@ -86,8 +99,8 @@ public static class Cask
             return false;
         }
 
-        Range ymdhTimestampRange = caskSignatureByteRange.End..(caskSignatureByteRange.End.Value + 3);
-        Range minutesSizesAndKeyKindRange = ymdhTimestampRange.End..(ymdhTimestampRange.End.Value + 3);
+        Range ymdhTimestampRange = caskSignatureByteRange.End..(caskSignatureByteRange.End.Value + CaskSignatureSizeInBytes);
+        Range minutesSizesAndKeyKindRange = ymdhTimestampRange.End..(ymdhTimestampRange.End.Value + YearMonthDayHourSizeInBytes);
 
         Span<char> minutesSizesAndKeyKindChars = stackalloc char[4];
         int bytesWritten = Base64Url.EncodeToChars(keyBytes[minutesSizesAndKeyKindRange], minutesSizesAndKeyKindChars);
@@ -99,13 +112,13 @@ public static class Cask
             return false;
         }
 
-        int providerDataLengthInBytes = (minutesSizesAndKeyKindChars[2] - 'A') * 3;
-        if (providerDataLengthInBytes > MaxProviderDataLengthInBytes || !Is3ByteAligned(providerDataLengthInBytes))
+        int providerDataLengthInBytes = (minutesSizesAndKeyKindChars[2] - 'A') * OptionalDataChunkSizeInBytes;
+        if (providerDataLengthInBytes > MaxProviderDataLengthInBytes)
         {
             return false;
         }
 
-        int secretSizeInBytes = (int)encodedSecretSize * 16;
+        int secretSizeInBytes = (int)encodedSecretSize * SecretChunkSizeInBytes;
         int paddedSecretSizeInBytes = RoundUpTo3ByteAlignment(secretSizeInBytes);
         int expectedKeyLengthInBytes = paddedSecretSizeInBytes + FixedKeyComponentSizeInBytes + providerDataLengthInBytes;
         if (expectedKeyLengthInBytes != keyBytes.Length)
@@ -113,8 +126,9 @@ public static class Cask
             return false;
         }
 
-        // TODO: Review Cask.IsCaskBytes and its callers carefully to ensure all useful checks are made.
-        // Specifically, we are missing validations and supporting unit tests for invalid timestamps.
+        // TODO: Review Cask.IsCaskBytes and its callers carefully to ensure all
+        // useful checks are made. Specifically, we are missing validations and
+        // supporting unit tests for invalid timestamps.
         // https://github.com/microsoft/cask/issues/45
 
         return true;
@@ -123,48 +137,51 @@ public static class Cask
     internal static SecretSize ExtractSecretSizeFromKeyChars(ReadOnlySpan<char> key, out Range caskSignatureCharRange)
     {
         SecretSize secretSize = InferSecretSizeFromCharLength(key.Length);
-        caskSignatureCharRange = ComputeSignatureCharRange(secretSize);
-        Index secretSizeCharIndex = caskSignatureCharRange.End.Value + SecretSizeOffsetFromCaskSignatureChar;
-        return (SecretSize)(key[secretSizeCharIndex] - 'A');
+        caskSignatureCharRange = ComputeCaskSignatureCharRange(secretSize);
+        int secretSizeCharOffset = caskSignatureCharRange.Start.Value + SecretSizeOffsetFromCaskSignatureOffset;
+        return (SecretSize)(key[secretSizeCharOffset] - 'A');
     }
 
 
     public static CaskKey GenerateKey(string providerSignature,
                                       char providerKeyKind,
                                       string? providerData = null,
-                                      SecretSize secretDataSize = SecretSize.Bits256)
+                                      SecretSize secretSize = SecretSize.Bits256)
     {
         providerData ??= string.Empty;
 
         ValidateProviderSignature(providerSignature);
         ValidateProviderKeyKind(providerKeyKind);
         ValidateProviderData(providerData);
-        ValidateSecretSize(secretDataSize);
+        ValidateSecretSize(secretSize);
 
         // Calculate the length of the key.
         int providerDataLengthInBytes = Base64CharsToBytes(providerData.Length);
 
-        int keyLengthInBytes = GetKeyLengthInBytes(providerDataLengthInBytes, secretDataSize);
+        int keyLengthInBytes = GetKeyLengthInBytes(providerDataLengthInBytes, secretSize);
 
-        int secretSizeInBytes = (int)secretDataSize * 16;
-        int paddedSecretSizeInBytes = RoundUpTo3ByteAlignment(secretSizeInBytes);
-        int intPaddingBytes = paddedSecretSizeInBytes - secretSizeInBytes;
+        int secretSizeInBytes = (int)secretSize * SecretChunkSizeInBytes;
 
         // Allocate a buffer on the stack to hold the key bytes.
         Debug.Assert(keyLengthInBytes <= MaxKeyLengthInBytes);
         Span<byte> key = stackalloc byte[keyLengthInBytes];
+        Span<byte> destination = key;
 
         // Entropy comprising the sensitive component of the key. In the future,
         // we will have primitives that allow callers to provider their own
         // secret bytes, e.g., for HMAC scenarios.
-        FillRandom(key[..secretSizeInBytes]);
+        FillRandom(destination[..secretSizeInBytes]);
+        destination = destination[secretSizeInBytes..];
 
-        int paddingInBytes = paddedSecretSizeInBytes - secretSizeInBytes;
-        key.Slice(secretSizeInBytes, paddingInBytes).Clear();
+        // Padding.
+        int paddedSecretSizeInBytes = RoundUpTo3ByteAlignment(secretSizeInBytes);
+        int countOfPaddingBytes = paddedSecretSizeInBytes - secretSizeInBytes;
+        destination[..countOfPaddingBytes].Clear();
+        destination = destination[countOfPaddingBytes..];
 
         // CASK signature.
-        Range caskSignatureByteRange = ComputeSignatureByteRange(secretDataSize);
-        CaskSignatureBytes.CopyTo(key[caskSignatureByteRange]);
+        CaskSignatureBytes.CopyTo(destination[..CaskSignatureSizeInBytes]);
+        destination = destination[CaskSignatureSizeInBytes..];
 
         DateTimeOffset now = GetUtcNow();
         ValidateTimestamp(now);
@@ -175,50 +192,49 @@ public static class Cask
             Base64UrlChars[now.Hour],        // Zero-indexed hour.
         ];
 
-        Range ymdhByteRange = caskSignatureByteRange.End..(caskSignatureByteRange.End.Value + 3);
-        int bytesWritten = Base64Url.DecodeFromChars(chars, key[ymdhByteRange]);
-        Debug.Assert(bytesWritten == 3);
+        int bytesWritten = Base64Url.DecodeFromChars(chars, destination[..YearMonthDayHourSizeInBytes]);
+        Debug.Assert(bytesWritten == YearMonthDayHourSizeInBytes);
+        destination = destination[YearMonthDayHourSizeInBytes..];
 
         chars = [
             Base64UrlChars[now.Minute],                  // Zero-index minute.
-            Base64UrlChars[(int)secretDataSize],      // Zero-indexed month.
+            Base64UrlChars[(int)secretSize],             // Zero-indexed month.
             Base64UrlChars[providerDataLengthInBytes/3], // Zero-indexed day.
             providerKeyKind,                             // Zero-indexed hour.
         ];
 
-        Range minutesSizesKeyKindByteRange = ymdhByteRange.End..(ymdhByteRange.End.Value + 3);
-        bytesWritten = Base64Url.DecodeFromChars(chars, key[minutesSizesKeyKindByteRange]);
-        Debug.Assert(bytesWritten == 3);
+        bytesWritten = Base64Url.DecodeFromChars(chars, destination[..MinuteSizesAndKeyKindSizeInBytes]);
+        Debug.Assert(bytesWritten == MinuteSizesAndKeyKindSizeInBytes);
+        destination = destination[MinuteSizesAndKeyKindSizeInBytes..];
 
-        Range optionalProviderDataByteRange = minutesSizesKeyKindByteRange.End..(minutesSizesKeyKindByteRange.End.Value + providerDataLengthInBytes);
-        bytesWritten = Base64Url.DecodeFromChars(providerData.AsSpan(), key[optionalProviderDataByteRange]);
+        bytesWritten = Base64Url.DecodeFromChars(providerData.AsSpan(), destination[..providerDataLengthInBytes]);
         Debug.Assert(bytesWritten == providerDataLengthInBytes);
+        destination = destination[providerDataLengthInBytes..];
 
-        Range providerSignatureByteRange = optionalProviderDataByteRange.End..(optionalProviderDataByteRange.End.Value + 3);
-        bytesWritten = Base64Url.DecodeFromChars(providerSignature.AsSpan(), key[providerSignatureByteRange]);
-        Debug.Assert(bytesWritten == 3);
+        bytesWritten = Base64Url.DecodeFromChars(providerSignature.AsSpan(), destination[..ProviderSignatureSizeInBytes]);
+        Debug.Assert(bytesWritten == ProviderSignatureSizeInBytes);
+        destination = destination[ProviderSignatureSizeInBytes..];
 
         // Entropy comprising the non-sensitive correlating id of the key.
-        Range correlatingIdByteRange = providerSignatureByteRange.End..(providerSignatureByteRange.End.Value + 15);
-        FillRandom(key[correlatingIdByteRange]);
+        FillRandom(destination[..CorrelatingIdSizeInBytes]);
 
         return CaskKey.Encode(key);
     }
 
 
-    private static Range ComputeSignatureCharRange(SecretSize secretSize)
+    private static Range ComputeCaskSignatureCharRange(SecretSize secretSize)
     {
-        int secretSizeInBytes = (int)secretSize * 16;
+        int secretSizeInBytes = (int)secretSize * SecretChunkSizeInBytes;
         int paddedSecretSizeInBytes = RoundUpTo3ByteAlignment(secretSizeInBytes);
-        int sensitiveDataCharOffset = paddedSecretSizeInBytes / 3 * 4;
-        return sensitiveDataCharOffset..(sensitiveDataCharOffset + 4);
+        int caskSignatureCharOffset = paddedSecretSizeInBytes / 3 * 4;
+        return caskSignatureCharOffset..(caskSignatureCharOffset + CaskSignature.Length);
     }
 
     private static Range ComputeSignatureByteRange(SecretSize secretSize)
     {
-        int secretSizeInBytes = (int)secretSize * 16;
+        int secretSizeInBytes = (int)secretSize * SecretChunkSizeInBytes;
         int paddedSecretSizeInBytes = RoundUpTo3ByteAlignment(secretSizeInBytes);
-        return paddedSecretSizeInBytes..(paddedSecretSizeInBytes + 3);
+        return paddedSecretSizeInBytes..(paddedSecretSizeInBytes + CaskSignatureSizeInBytes);
     }
 
     private static SecretSize InferSecretSizeFromCharLength(int lengthInChars)
@@ -238,29 +254,47 @@ public static class Cask
                                                                 ( 6 bytes) TimestampSizesAndProviderKindInBytes +
                                                                 ( 3 bytes) ProviderSignatureSizeInBytes +
                                                                 (15 bytes) CorrelatingIdSizeInBytes;
-         *  QJJQ YMDH MLOP TEST 1234 1234 1234 1234 1234
+         *  QJJQ YMDH MLOP TEST 1111 2222 3333 4444
          * 
-         *  128-bit : 45 bytes (18 bytes sensitive + 27 reserved) : 12 bytes of optional data permissible < (60 - 45)
-         *  256-bit : 60 bytes (33 bytes sensitive + 27 reserved) : 12 bytes of optional data permissible < (75 - 60)
-         *  384-bit : 75 bytes (48 bytes sensitive + 27 reserved) : 12 bytes of optional data permissible < (93 - 75)
-         *  512-bit : 93 bytes (66 bytes sensitive + 27 reserved) : 12 bytes (value chosen to align with 384 bit keys)
+         *  For all keys, there is a maximum of 12 bytes of optional data.
+         *  128-bit : 45 -  57 bytes (18 bytes sensitive + 27 reserved, 0 - 12 bytes optional data)
+         *  256-bit : 60 -  72 byte  (33 bytes sensitive + 27 reserved, 0 - 12 bytes optional data)
+         *  384-bit : 75 -  87 bytes (48 bytes sensitive + 27 reserved, 0 - 12 bytes optional data)
+         *  512-bit : 93 - 105 bytes (66 bytes sensitive + 27 reserved, 0 - 12 bytes optional data)
          *  
         */
 
+        Debug.Assert(lengthInBytes >= MinKeyLengthInBytes);
+        Debug.Assert(lengthInBytes <= MaxKeyLengthInBytes);
         Debug.Assert(IsValidKeyLengthInBytes(lengthInBytes));
 
-        if (lengthInBytes >= 93)
+        if (lengthInBytes >= Min512BitKeyLengthInBytes)
         {
+            Debug.Assert(lengthInBytes <= Max512BitKeyLengthInBytes);
             return SecretSize.Bits512;
         }
-        else if (lengthInBytes >= 75)
+        else if (lengthInBytes >= Min384BitKeyLengthInBytes)
         {
+            // A key length of 90 bytes isn't valid for our format. The reason
+            // is that the standard limits optionally provided data length to 12
+            // bytes, no matter what the size of the sensitive data. Because a
+            // 48-byte sensitive data size is already 3-byte aligned, the
+            // maximum length of this key is 87 bytes. The next key size (a
+            // 64-byte secret) rounds the sensitive data size up to 66 bytes. As
+            // a result, the minimal key length for the key size is 93 bytes. It
+            // is unfortunate that we have this embedded illegal key size, as it
+            // allows an unusual corner case.
+            Debug.Assert(lengthInBytes <= Max384BitKeyLengthInBytes);
             return SecretSize.Bits384;
         }
-        else if (lengthInBytes >= 60)
+        else if (lengthInBytes >= Min256BitKeyLengthInBytes)
         {
+            Debug.Assert(lengthInBytes <= Max256BitKeyLengthInBytes);
             return SecretSize.Bits256;
         }
+
+        Debug.Assert(lengthInBytes >= Min128BitKeyLengthInBytes);
+        Debug.Assert(lengthInBytes <= Max128BitKeyLengthInBytes);
 
         return SecretSize.Bits128;
     }
@@ -270,16 +304,16 @@ public static class Cask
     /// </summary>
     public static bool IsCaskUtf8(ReadOnlySpan<byte> keyUtf8)
     {
-        if (keyUtf8.Length < MinKeyLengthInChars || keyUtf8.Length > MaxKeyLengthInChars || !Is4CharAligned(keyUtf8.Length))
+        if (!IsValidKeyLengthInChars(keyUtf8.Length))
         {
             return false;
         }
 
         SecretSize secretSize = InferSecretSizeFromCharLength(keyUtf8.Length);
-        Range caskSignatureUtf8Range = ComputeSignatureCharRange(secretSize);
+        Range caskSignatureCharRange = ComputeCaskSignatureCharRange(secretSize);
 
         // Check for CASK signature, "QJJQ".
-        if (!keyUtf8[caskSignatureUtf8Range].SequenceEqual(CaskSignatureUtf8))
+        if (!keyUtf8[caskSignatureCharRange].SequenceEqual(CaskSignatureUtf8))
         {
             return false;
         }
@@ -359,7 +393,12 @@ public static class Cask
 
     private static bool IsValidKeyLengthInChars(int length)
     {
-        return length >= MinKeyLengthInChars && length <= MaxKeyLengthInChars && Is4CharAligned(length);
+        if (length < MinKeyLengthInChars || length > MaxKeyLengthInChars || !Is4CharAligned(length))
+        {
+            return false;
+        }
+
+        return length <= Max384BitKeyLengthInChars || length >= Min512BitKeyLengthInChars;
     }
 
     private static bool IsValidKeyLengthInBytes(int length)
