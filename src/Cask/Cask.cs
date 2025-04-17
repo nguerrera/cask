@@ -23,40 +23,77 @@ public static class Cask
     }
 
     /// <summary>
-    /// Validates that the provided UTF16-encoded text sequence represents a
-    /// valid Cask key.
+    /// Validates that the provided UTF16-encoded text represents a valid
+    /// base64url-encoded CASK key.
     /// </summary>
-    /// <param name="key"></param>
-    public static bool IsCask(ReadOnlySpan<char> key)
+    public static bool IsCask(ReadOnlySpan<char> encodedKey)
     {
-        if (!IsValidKeyLengthInChars(key.Length))
+        if (!IsValidKeyLengthInChars(encodedKey.Length))
         {
             return false;
         }
 
-        SecretSize secretSize = ExtractSecretSizeFromKeyChars(key, out Range caskSignatureCharRange);
-        if (secretSize < SecretSize.Bits128 || secretSize > SecretSize.Bits512)
-        {
-            return false;
-        }
+        Range caskSignatureCharRange = ComputeCaskSignatureCharRange(encodedKey.Length, out SecretSize _);
 
         // Check for CASK signature, "QJJQ".
-        if (!key[caskSignatureCharRange].SequenceEqual(CaskSignature))
+        if (!encodedKey[caskSignatureCharRange].SequenceEqual(CaskSignature))
         {
             return false;
         }
 
-        int lengthInBytes = Base64CharsToBytes(key.Length);
+        int lengthInBytes = Base64CharsToBytes(encodedKey.Length);
         Debug.Assert(lengthInBytes <= MaxKeyLengthInBytes);
         Span<byte> keyBytes = stackalloc byte[lengthInBytes];
 
-        OperationStatus status = Base64Url.DecodeFromChars(key,
+        OperationStatus status = Base64Url.DecodeFromChars(encodedKey,
                                                            keyBytes,
                                                            out int charsConsumed,
                                                            out int bytesWritten,
                                                            isFinalBlock: true);
 
-        Debug.Assert(status is OperationStatus.InvalidData || charsConsumed == key.Length);
+        Debug.Assert(status is OperationStatus.InvalidData || charsConsumed == encodedKey.Length);
+        Debug.Assert(status is not OperationStatus.DestinationTooSmall or OperationStatus.NeedMoreData);
+
+        // NOTE: Decoding can succeed with `bytesWritten < lengthInBytes` if the
+        //       input has padding or whitespace, which we don't allow.
+        if (status != OperationStatus.Done || bytesWritten != lengthInBytes)
+        {
+            return false;
+        }
+
+        return IsCaskBytes(keyBytes);
+    }
+
+    /// <summary>
+    /// Validates that the provided UTF8-encoded text represents a valid
+    /// base64url-encoded CASK key.
+    /// </summary>
+    public static bool IsCaskUtf8(ReadOnlySpan<byte> encodedKey)
+    {
+        if (!IsValidKeyLengthInChars(encodedKey.Length))
+        {
+            return false;
+        }
+
+        Range caskSignatureCharRange = ComputeCaskSignatureCharRange(encodedKey.Length, out SecretSize _);
+
+        // Check for CASK signature, "QJJQ".
+        if (!encodedKey[caskSignatureCharRange].SequenceEqual(CaskSignatureUtf8))
+        {
+            return false;
+        }
+
+        int lengthInBytes = Base64CharsToBytes(encodedKey.Length);
+        Debug.Assert(lengthInBytes <= MaxKeyLengthInBytes);
+        Span<byte> keyBytes = stackalloc byte[lengthInBytes];
+
+        OperationStatus status = Base64Url.DecodeFromUtf8(encodedKey,
+                                                          keyBytes,
+                                                          out int charsConsumed,
+                                                          out int bytesWritten,
+                                                          isFinalBlock: true);
+
+        Debug.Assert(status is OperationStatus.InvalidData || charsConsumed == encodedKey.Length);
         Debug.Assert(status is not OperationStatus.DestinationTooSmall or OperationStatus.NeedMoreData);
 
         // NOTE: Decoding can succeed with `bytesWritten < lengthInBytes` if the
@@ -72,14 +109,14 @@ public static class Cask
     /// <summary>
     /// Validates that the provided byte sequence represents a valid Cask key in binary decoded form.
     /// </summary>
-    public static bool IsCaskBytes(ReadOnlySpan<byte> keyBytes)
+    public static bool IsCaskBytes(ReadOnlySpan<byte> decodedKey)
     {
-        if (keyBytes.Length < MinKeyLengthInBytes || keyBytes.Length > MaxKeyLengthInBytes || !Is3ByteAligned(keyBytes.Length))
+        if (decodedKey.Length < MinKeyLengthInBytes || decodedKey.Length > MaxKeyLengthInBytes || !Is3ByteAligned(decodedKey.Length))
         {
             return false;
         }
 
-        if (keyBytes.Length > Max384BitKeyLengthInBytes && keyBytes.Length < Min512BitKeyLengthInBytes)
+        if (decodedKey.Length > Max384BitKeyLengthInBytes && decodedKey.Length < Min512BitKeyLengthInBytes)
         {
             // There is a 3-byte gap in valid keys lengths between the 384-bit
             // and 512-bit sizes. This early check short-circuits validation to
@@ -90,7 +127,7 @@ public static class Cask
             return false;
         }
 
-        int caskSignatureByteOffset = ComputeSignatureByteOffset(keyBytes.Length, out SecretSize secretSize);
+        int caskSignatureByteOffset = ComputeSignatureByteOffset(decodedKey.Length, out SecretSize secretSize);
 
         if (secretSize != SecretSize.Bits384)
         {
@@ -98,14 +135,14 @@ public static class Cask
 
             for (int i = 1; i <= paddingBytesCount; i++)
             {
-                if (keyBytes[caskSignatureByteOffset - i] != 0)
+                if (decodedKey[caskSignatureByteOffset - i] != 0)
                 {
                     return false;
                 }
             }
         }
 
-        ReadOnlySpan<byte> source = keyBytes[caskSignatureByteOffset..];
+        ReadOnlySpan<byte> source = decodedKey[caskSignatureByteOffset..];
 
         // Check for CASK signature. "QJJQ" base64-decoded.
         if (!source[..CaskSignatureSizeInBytes].SequenceEqual(CaskSignatureBytes))
@@ -141,7 +178,7 @@ public static class Cask
         int secretSizeInBytes = (int)encodedSecretSize * SecretChunkSizeInBytes;
         int paddedSecretSizeInBytes = RoundUpTo3ByteAlignment(secretSizeInBytes);
         int expectedKeyLengthInBytes = paddedSecretSizeInBytes + FixedKeyComponentSizeInBytes + encodedProviderDataSizeInBytes;
-        if (expectedKeyLengthInBytes != keyBytes.Length)
+        if (expectedKeyLengthInBytes != decodedKey.Length)
         {
             return false;
         }
@@ -352,47 +389,6 @@ public static class Cask
         Debug.Assert(lengthInBytes <= Max128BitKeyLengthInBytes);
 
         return SecretSize.Bits128;
-    }
-
-    /// <summary>
-    /// Validates that the provided UTF8-encoded byte sequence represents a valid Cask key.
-    /// </summary>
-    public static bool IsCaskUtf8(ReadOnlySpan<byte> keyUtf8)
-    {
-        if (!IsValidKeyLengthInChars(keyUtf8.Length))
-        {
-            return false;
-        }
-
-        Range caskSignatureCharRange = ComputeCaskSignatureCharRange(keyUtf8.Length, out SecretSize _);
-
-        // Check for CASK signature, "QJJQ".
-        if (!keyUtf8[caskSignatureCharRange].SequenceEqual(CaskSignatureUtf8))
-        {
-            return false;
-        }
-
-        int lengthInBytes = Base64CharsToBytes(keyUtf8.Length);
-        Debug.Assert(lengthInBytes <= MaxKeyLengthInBytes);
-        Span<byte> keyBytes = stackalloc byte[lengthInBytes];
-
-        OperationStatus status = Base64Url.DecodeFromUtf8(keyUtf8,
-                                                          keyBytes,
-                                                          out int charsConsumed,
-                                                          out int bytesWritten,
-                                                          isFinalBlock: true);
-
-        Debug.Assert(status is OperationStatus.InvalidData || charsConsumed == keyUtf8.Length);
-        Debug.Assert(status is not OperationStatus.DestinationTooSmall or OperationStatus.NeedMoreData);
-
-        // NOTE: Decoding can succeed with `bytesWritten < lengthInBytes` if the
-        //       input has padding or whitespace, which we don't allow.
-        if (status != OperationStatus.Done || bytesWritten != lengthInBytes)
-        {
-            return false;
-        }
-
-        return IsCaskBytes(keyBytes);
     }
 
     private static void FillRandom(Span<byte> buffer)
