@@ -5,10 +5,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="../../docs/CSharp_ReleaseHistory.md" Visible="false" Pack="true" PackagePath="ReleaseHistory.md" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="Microsoft.Bcl.Memory" />
   </ItemGroup>
 
